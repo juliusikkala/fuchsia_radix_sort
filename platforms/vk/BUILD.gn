@@ -1,0 +1,86 @@
+# Copyright 2021 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//src/graphics/lib/compute/gn/build_rules.gni")
+
+#
+# Vulkan Radix Sort library
+#
+config("config") {
+  include_dirs = [ "include" ]
+}
+
+config("config_debug_utils") {  # Enables VK object labelling
+  defines = [ "RADIX_SORT_VK_ENABLE_DEBUG_UTILS" ]
+}
+
+config("config_extensions") {  # Enables per pipeline timestamping
+  defines = [ "RADIX_SORT_VK_ENABLE_EXTENSIONS" ]
+}
+
+#
+# Headers
+#
+source_set("headers") {
+  public_configs = [ ":config" ]
+  public = [
+    "include/radix_sort/platforms/vk/radix_sort_vk.h",
+    "include/radix_sort/platforms/vk/radix_sort_vk_devaddr.h",
+  ]
+  sources = [
+    "include/radix_sort/platforms/vk/radix_sort_vk.h",
+    "include/radix_sort/platforms/vk/radix_sort_vk_devaddr.h",
+  ]
+}
+
+#
+# Default set of sources without debugging and profiling extensions
+#
+source_set("vk") {
+  public_configs = [ ":config_debug_utils" ]
+  sources = [
+    "radix_sort_vk.c",
+    "radix_sort_vk_ext.h",
+    "shaders/push.h",
+    "target.h",
+    "target_requirements.c",
+    "target_requirements.h",
+  ]
+  public_deps = [ ":headers" ]
+  deps = [
+    "${graphics_compute_dir}/common",
+    "${graphics_compute_dir}/common/vk",
+    "${graphics_compute_dir}/tools/target_archive:target_archive_headers",
+    graphics_compute_vulkan_loader_target,
+  ]
+}
+
+#
+# A semi-private target used for testing and benchmarking.
+#
+# NOTE(allanmac): Is there a better way to express the same source set
+# with extra configs?  A template can be used.
+#
+source_set("vk_tests") {
+  public_configs = [
+    ":config_debug_utils",
+    ":config_extensions",
+  ]
+  sources = [
+    "radix_sort_vk.c",
+    "radix_sort_vk_ext.h",
+    "shaders/push.h",
+    "target.h",
+    "target_requirements.c",
+    "target_requirements.h",
+  ]
+  public_deps = [ ":headers" ]
+  deps = [
+    "${graphics_compute_dir}/common",
+    "${graphics_compute_dir}/common/vk",
+    "${graphics_compute_dir}/tools/target_archive:target_archive_headers",
+    graphics_compute_vulkan_loader_target,
+  ]
+  friend = [ "tests/radix_sort_vk_bench:*" ]
+}
