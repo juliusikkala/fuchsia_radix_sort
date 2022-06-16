@@ -53,6 +53,9 @@ add_library(vk-radix-sort STATIC
     platforms/vk/target.c
     platforms/vk/target_requirements.c
     platforms/vk/target_requirements.h
+    common/vk/assert.c
+    common/vk/barrier.c
+    common/util.c
     ${target_sources}
     ${shader_binary}
 )
