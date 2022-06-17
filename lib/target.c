@@ -2,6 +2,7 @@
 
 #include "common/macros.h"
 #include "common/util.h"
+#include <string.h>
 #include "radix_sort/radix_sort_vk.h"
 static
 #include "i64_u32_init.comp.h"
@@ -55,7 +56,7 @@ extern const struct radix_sort_vk_target   gen8_u64_target;
 extern const struct radix_sort_vk_target   sm35_u32_target;
 extern const struct radix_sort_vk_target   sm35_u64_target;
 
-radix_sort_vk_target_t
+radix_sort_vk_target_t*
 radix_sort_vk_target_auto_detect(VkPhysicalDeviceProperties const *         props,
                                  VkPhysicalDeviceSubgroupProperties const * subgroup_props,
                                  uint32_t                                   keyval_dwords)
@@ -220,7 +221,11 @@ radix_sort_vk_target_auto_detect(VkPhysicalDeviceProperties const *         prop
       target.config.scatter.workgroup_size_log2 =
         MAX_MACRO(uint32_t, target.config.scatter.workgroup_size_log2, subgroup_log2);
     }
-  return target;
+
+  radix_sort_vk_target_t* target_ptr = MALLOC_MACRO(sizeof(radix_sort_vk_target_t));
+  memcpy(target_ptr, &target, sizeof(target));
+
+  return target_ptr;
 }
 
 const struct radix_sort_vk_target_modules radix_sort_u32_modules_i64 = {
