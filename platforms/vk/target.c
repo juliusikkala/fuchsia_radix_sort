@@ -36,37 +36,21 @@ static
   static
 #include "build/noi64_u64_prefix.comp.h"
   static
-#include "build/i64_u32_scatter_0_even.comp.h"
+#include "build/i64_u32_scatter_even.comp.h"
   static
-#include "build/i64_u64_scatter_0_even.comp.h"
+#include "build/i64_u64_scatter_even.comp.h"
   static
-#include "build/noi64_u32_scatter_0_even.comp.h"
+#include "build/noi64_u32_scatter_even.comp.h"
   static
-#include "build/noi64_u64_scatter_0_even.comp.h"
+#include "build/noi64_u64_scatter_even.comp.h"
   static
-#include "build/i64_u32_scatter_0_odd.comp.h"
+#include "build/i64_u32_scatter_odd.comp.h"
   static
-#include "build/i64_u64_scatter_0_odd.comp.h"
+#include "build/i64_u64_scatter_odd.comp.h"
   static
-#include "build/noi64_u32_scatter_0_odd.comp.h"
+#include "build/noi64_u32_scatter_odd.comp.h"
   static
-#include "build/noi64_u64_scatter_0_odd.comp.h"
-  static
-#include "build/i64_u32_scatter_1_even.comp.h"
-  static
-#include "build/i64_u64_scatter_1_even.comp.h"
-  static
-#include "build/noi64_u32_scatter_1_even.comp.h"
-  static
-#include "build/noi64_u64_scatter_1_even.comp.h"
-  static
-#include "build/i64_u32_scatter_1_odd.comp.h"
-  static
-#include "build/i64_u64_scatter_1_odd.comp.h"
-  static
-#include "build/noi64_u32_scatter_1_odd.comp.h"
-  static
-#include "build/noi64_u64_scatter_1_odd.comp.h"
+#include "build/noi64_u64_scatter_odd.comp.h"
 
   extern const struct radix_sort_vk_target gcn3_u32_target;
 extern const struct radix_sort_vk_target   gcn3_u64_target;
@@ -253,16 +237,16 @@ const struct radix_sort_vk_target_modules radix_sort_u32_modules_i64 = {
                     sizeof(i64_u32_fill_comp_shader_binary),
                     sizeof(i64_u32_histogram_comp_shader_binary),
                     sizeof(i64_u32_prefix_comp_shader_binary),
-                    sizeof(i64_u32_scatter_0_even_comp_shader_binary),
-                    sizeof(i64_u32_scatter_0_odd_comp_shader_binary),
+                    sizeof(i64_u32_scatter_even_comp_shader_binary),
+                    sizeof(i64_u32_scatter_odd_comp_shader_binary),
                     0,
                     0 },
   .module_data  = { i64_u32_init_comp_shader_binary,
                     i64_u32_fill_comp_shader_binary,
                     i64_u32_histogram_comp_shader_binary,
                     i64_u32_prefix_comp_shader_binary,
-                    i64_u32_scatter_0_even_comp_shader_binary,
-                    i64_u32_scatter_0_odd_comp_shader_binary,
+                    i64_u32_scatter_even_comp_shader_binary,
+                    i64_u32_scatter_odd_comp_shader_binary,
                     (void *)0,
                     (void *)0 }
 };
@@ -273,18 +257,18 @@ const struct radix_sort_vk_target_modules radix_sort_u64_modules_i64 = {
                     sizeof(i64_u64_fill_comp_shader_binary),
                     sizeof(i64_u64_histogram_comp_shader_binary),
                     sizeof(i64_u64_prefix_comp_shader_binary),
-                    sizeof(i64_u64_scatter_0_even_comp_shader_binary),
-                    sizeof(i64_u64_scatter_0_odd_comp_shader_binary),
-                    sizeof(i64_u64_scatter_1_even_comp_shader_binary),
-                    sizeof(i64_u64_scatter_1_odd_comp_shader_binary) },
+                    sizeof(i64_u64_scatter_even_comp_shader_binary),
+                    sizeof(i64_u64_scatter_odd_comp_shader_binary),
+                    sizeof(i64_u64_scatter_even_comp_shader_binary),
+                    sizeof(i64_u64_scatter_odd_comp_shader_binary) },
   .module_data  = { i64_u64_init_comp_shader_binary,
                     i64_u64_fill_comp_shader_binary,
                     i64_u64_histogram_comp_shader_binary,
                     i64_u64_prefix_comp_shader_binary,
-                    i64_u64_scatter_0_even_comp_shader_binary,
-                    i64_u64_scatter_0_odd_comp_shader_binary,
-                    i64_u64_scatter_1_even_comp_shader_binary,
-                    i64_u64_scatter_1_odd_comp_shader_binary }
+                    i64_u64_scatter_even_comp_shader_binary,
+                    i64_u64_scatter_odd_comp_shader_binary,
+                    i64_u64_scatter_even_comp_shader_binary,
+                    i64_u64_scatter_odd_comp_shader_binary }
 };
 
 const struct radix_sort_vk_target_modules radix_sort_u32_modules_noi64 = {
@@ -293,16 +277,16 @@ const struct radix_sort_vk_target_modules radix_sort_u32_modules_noi64 = {
                     sizeof(noi64_u32_fill_comp_shader_binary),
                     sizeof(noi64_u32_histogram_comp_shader_binary),
                     sizeof(noi64_u32_prefix_comp_shader_binary),
-                    sizeof(noi64_u32_scatter_0_even_comp_shader_binary),
-                    sizeof(noi64_u32_scatter_0_odd_comp_shader_binary),
+                    sizeof(noi64_u32_scatter_even_comp_shader_binary),
+                    sizeof(noi64_u32_scatter_odd_comp_shader_binary),
                     0,
                     0 },
   .module_data  = { noi64_u32_init_comp_shader_binary,
                     noi64_u32_fill_comp_shader_binary,
                     noi64_u32_histogram_comp_shader_binary,
                     noi64_u32_prefix_comp_shader_binary,
-                    noi64_u32_scatter_0_even_comp_shader_binary,
-                    noi64_u32_scatter_0_odd_comp_shader_binary,
+                    noi64_u32_scatter_even_comp_shader_binary,
+                    noi64_u32_scatter_odd_comp_shader_binary,
                     (void *)0,
                     (void *)0 }
 };
@@ -313,16 +297,16 @@ const struct radix_sort_vk_target_modules radix_sort_u64_modules_noi64 = {
                     sizeof(noi64_u64_fill_comp_shader_binary),
                     sizeof(noi64_u64_histogram_comp_shader_binary),
                     sizeof(noi64_u64_prefix_comp_shader_binary),
-                    sizeof(noi64_u64_scatter_0_even_comp_shader_binary),
-                    sizeof(noi64_u64_scatter_0_odd_comp_shader_binary),
-                    sizeof(noi64_u64_scatter_1_even_comp_shader_binary),
-                    sizeof(noi64_u64_scatter_1_odd_comp_shader_binary) },
+                    sizeof(noi64_u64_scatter_even_comp_shader_binary),
+                    sizeof(noi64_u64_scatter_odd_comp_shader_binary),
+                    sizeof(noi64_u64_scatter_even_comp_shader_binary),
+                    sizeof(noi64_u64_scatter_odd_comp_shader_binary) },
   .module_data  = { noi64_u64_init_comp_shader_binary,
                     noi64_u64_fill_comp_shader_binary,
                     noi64_u64_histogram_comp_shader_binary,
                     noi64_u64_prefix_comp_shader_binary,
-                    noi64_u64_scatter_0_even_comp_shader_binary,
-                    noi64_u64_scatter_0_odd_comp_shader_binary,
-                    noi64_u64_scatter_1_even_comp_shader_binary,
-                    noi64_u64_scatter_1_odd_comp_shader_binary }
+                    noi64_u64_scatter_even_comp_shader_binary,
+                    noi64_u64_scatter_odd_comp_shader_binary,
+                    noi64_u64_scatter_even_comp_shader_binary,
+                    noi64_u64_scatter_odd_comp_shader_binary }
 };

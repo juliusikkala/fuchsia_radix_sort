@@ -74,11 +74,6 @@ layout(push_constant) uniform block_push
 #error "Undefined: RS_KEYVAL_DWORDS"
 #endif
 
-// Which keyval dword does this shader bitfieldExtract() bits?
-#ifndef RS_SCATTER_KEYVAL_DWORD_BASE
-#error "Undefined: RS_SCATTER_KEYVAL_DWORD_BASE"
-#endif
-
 //
 // Status masks are defined differently for the scatter_even and
 // scatter_odd shaders.

@@ -398,27 +398,39 @@ radix_sort_vk_create(VkDevice                       device,
     { 9, 9 * sizeof(uint32_t), sizeof(uint32_t) },    // RS_SCATTER_BLOCK_ROWS
     { 10, 10 * sizeof(uint32_t), sizeof(uint32_t) },  // RS_SCATTER_ENABLE_BROADCAST_MATCH
     { 11, 11 * sizeof(uint32_t), sizeof(uint32_t) },  // RS_HISTOGRAM_DISABLE_SMEM_HISTOGRAM
-    { 12, 12 * sizeof(uint32_t), sizeof(uint32_t) }   // RS_SCATTER_DISABLE_REORDER
+    { 12, 12 * sizeof(uint32_t), sizeof(uint32_t) },  // RS_SCATTER_DISABLE_REORDER
+    { 13, 13 * sizeof(uint32_t), sizeof(uint32_t) }   // RS_SCATTER_KEYVAL_DWORD_BASE
   };
 
-  uint32_t spec_data[] = { 1 << rs->config.fill.workgroup_size_log2,
-                           rs->config.fill.block_rows,
-                           1 << rs->config.histogram.workgroup_size_log2,
-                           1 << rs->config.histogram.subgroup_size_log2,
-                           rs->config.histogram.block_rows,
-                           1 << rs->config.prefix.workgroup_size_log2,
-                           1 << rs->config.prefix.subgroup_size_log2,
-                           1 << rs->config.scatter.workgroup_size_log2,
-                           1 << rs->config.scatter.subgroup_size_log2,
-                           rs->config.scatter.block_rows,
-                           rs->config.scatter.enable_broadcast,
-                           rs->config.histogram.disable_smem_histogram,
-                           rs->config.scatter.disable_reorder };
+  uint32_t spec_data_scatter0[] = { 1 << rs->config.fill.workgroup_size_log2,
+                                    rs->config.fill.block_rows,
+                                    1 << rs->config.histogram.workgroup_size_log2,
+                                    1 << rs->config.histogram.subgroup_size_log2,
+                                    rs->config.histogram.block_rows,
+                                    1 << rs->config.prefix.workgroup_size_log2,
+                                    1 << rs->config.prefix.subgroup_size_log2,
+                                    1 << rs->config.scatter.workgroup_size_log2,
+                                    1 << rs->config.scatter.subgroup_size_log2,
+                                    rs->config.scatter.block_rows,
+                                    rs->config.scatter.enable_broadcast,
+                                    rs->config.histogram.disable_smem_histogram,
+                                    rs->config.scatter.disable_reorder,
+                                    0 };
 
-  VkSpecializationInfo spec_info = { ARRAY_LENGTH_MACRO(spec_entries),
-                                     spec_entries,
-                                     sizeof(spec_data),
-                                     spec_data };
+  uint32_t spec_data_scatter1[ARRAY_LENGTH_MACRO(spec_data_scatter0)];
+  memcpy(spec_data_scatter1, spec_data_scatter0, sizeof(spec_data_scatter0));
+
+  spec_data_scatter1[13] = 1;
+
+  VkSpecializationInfo spec_info_scatter0 = { ARRAY_LENGTH_MACRO(spec_entries),
+                                              spec_entries,
+                                              sizeof(spec_data_scatter0),
+                                              spec_data_scatter0 };
+
+  VkSpecializationInfo spec_info_scatter1 = { ARRAY_LENGTH_MACRO(spec_entries),
+                                              spec_entries,
+                                              sizeof(spec_data_scatter1),
+                                              spec_data_scatter1 };
 
   //
   // Create compute pipelines
@@ -493,7 +505,7 @@ radix_sort_vk_create(VkDevice                       device,
                .stage               = VK_SHADER_STAGE_COMPUTE_BIT,                                 \
                .module              = sms[idx_],                                                   \
                .pName               = "main",                                                      \
-               .pSpecializationInfo = &spec_info },                                                \
+               .pSpecializationInfo = idx_ >= 6 ? &spec_info_scatter1 : &spec_info_scatter0 },     \
                                                                                                    \
     .layout             = rs->pipeline_layouts.handles[idx_],                                      \
     .basePipelineHandle = VK_NULL_HANDLE,                                                          \
