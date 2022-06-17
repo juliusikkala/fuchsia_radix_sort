@@ -24,14 +24,14 @@
 //
 //
 //
-#include "radix_sort/platforms/vk/radix_sort_vk.h"  // public
+#include "radix_sort/radix_sort_vk.h"  // public
 
 //
 // This test is a friend of the radix sort library and uses private includes.
 //
 #include "find_target_name.h"
-#include "platforms/vk/radix_sort_vk_ext.h"  // private
-#include "platforms/vk/shaders/push.h"       // private
+#include "lib/radix_sort_vk_ext.h"  // private
+#include "lib/shaders/push.h"       // private
 #include "radix_sort_vk_bench.h"
 
 //

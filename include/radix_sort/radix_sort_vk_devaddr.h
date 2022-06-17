@@ -9,7 +9,7 @@
 // Provides a (nearly) pure VkDeviceAddress interface to the radix sort library.
 //
 
-#include "radix_sort/platforms/vk/radix_sort_vk.h"
+#include "radix_sort_vk.h"
 
 //
 //

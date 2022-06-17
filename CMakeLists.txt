@@ -32,12 +32,11 @@ foreach(support IN ITEMS noi64 i64)
         else()
           set(d ${d} -DRS_KEYVAL_DWORDS=2)
         endif()
-        message("add shader " ${d})
-        shader(${a}init.comp.h platforms/vk/shaders/init.comp shader_binary ${d})
-        shader(${a}fill.comp.h platforms/vk/shaders/fill.comp shader_binary ${d})
-        shader(${a}histogram.comp.h platforms/vk/shaders/histogram.comp shader_binary ${d})
-        shader(${a}prefix.comp.h platforms/vk/shaders/prefix.comp shader_binary ${d})
-        shader(${a}scatter.comp.h platforms/vk/shaders/scatter.comp shader_binary ${d})
+        shader(${a}init.comp.h lib/shaders/init.comp shader_binary ${d})
+        shader(${a}fill.comp.h lib/shaders/fill.comp shader_binary ${d})
+        shader(${a}histogram.comp.h lib/shaders/histogram.comp shader_binary ${d})
+        shader(${a}prefix.comp.h lib/shaders/prefix.comp shader_binary ${d})
+        shader(${a}scatter.comp.h lib/shaders/scatter.comp shader_binary ${d})
     endforeach()
 endforeach()
 
@@ -50,18 +49,18 @@ set(targets
 )
 
 foreach(target ${targets})
-    set(target_sources ${target_sources} "${CMAKE_CURRENT_SOURCE_DIR}/platforms/vk/targets/vendors/${target}/u32/header.c")
-    set(target_sources ${target_sources} "${CMAKE_CURRENT_SOURCE_DIR}/platforms/vk/targets/vendors/${target}/u64/header.c")
+    set(target_sources ${target_sources} "${CMAKE_CURRENT_SOURCE_DIR}/lib/targets/${target}/u32/header.c")
+    set(target_sources ${target_sources} "${CMAKE_CURRENT_SOURCE_DIR}/lib/targets/${target}/u64/header.c")
 endforeach()
 
 add_library(vk-radix-sort STATIC
-    platforms/vk/radix_sort_vk.c
-    platforms/vk/radix_sort_vk_ext.h
-    platforms/vk/shaders/push.h
-    platforms/vk/target.h
-    platforms/vk/target.c
-    platforms/vk/target_requirements.c
-    platforms/vk/target_requirements.h
+    lib/radix_sort_vk.c
+    lib/radix_sort_vk_ext.h
+    lib/shaders/push.h
+    lib/target.h
+    lib/target.c
+    lib/target_requirements.c
+    lib/target_requirements.h
     common/vk/assert.c
     common/vk/barrier.c
     common/util.c
@@ -70,17 +69,17 @@ add_library(vk-radix-sort STATIC
 )
 
 target_link_libraries(vk-radix-sort PUBLIC Vulkan::Vulkan)
-target_include_directories(vk-radix-sort PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/platforms/vk ${CMAKE_CURRENT_BINARY_DIR})
-target_include_directories(vk-radix-sort PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/platforms/vk/include)
+target_include_directories(vk-radix-sort PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/lib ${CMAKE_CURRENT_BINARY_DIR})
+target_include_directories(vk-radix-sort PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
     if(BUILD_TESTING)
         enable_language(CXX)
         set(common_src
-            platforms/vk/tests/radix_sort_vk_bench/cpu_sort.cc
-            platforms/vk/tests/radix_sort_vk_bench/radix_sort_vk_bench.c
-            platforms/vk/tests/radix_sort_vk_bench/find_target_name.c
+            tests/radix_sort_vk_bench/cpu_sort.cc
+            tests/radix_sort_vk_bench/radix_sort_vk_bench.c
+            tests/radix_sort_vk_bench/find_target_name.c
             common/vk/assert.c
             common/vk/barrier.c
             common/vk/debug_utils.c
@@ -88,16 +87,16 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
             common/vk/pipeline_cache.c
             common/util.c
         )
-        add_executable(benchmark platforms/vk/tests/radix_sort_vk_bench/main.c ${common_src})
+        add_executable(benchmark tests/radix_sort_vk_bench/main.c ${common_src})
         target_link_libraries(benchmark PUBLIC vk-radix-sort)
         target_include_directories(benchmark PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
         target_compile_definitions(benchmark PUBLIC RS_VK_TARGET_ARCHIVE_LINKABLE)
 
         include(GoogleTest)
 
-        add_executable(unittest platforms/vk/tests/radix_sort_vk_bench/tests/radix_sort_vk_bench_unittests.cc ${common_src})
+        add_executable(unittest tests/radix_sort_vk_bench/tests/radix_sort_vk_bench_unittests.cc ${common_src})
         target_link_libraries(unittest PUBLIC vk-radix-sort gtest gtest_main)
-        target_include_directories(unittest PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} platforms/vk/tests/radix_sort_vk_bench)
+        target_include_directories(unittest PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} tests/radix_sort_vk_bench)
         target_compile_definitions(unittest PUBLIC RS_VK_TARGET_ARCHIVE_LINKABLE)
 
         gtest_add_tests(unittest "" AUTO)

@@ -2,7 +2,7 @@
 
 #include "common/macros.h"
 #include "common/util.h"
-#include "radix_sort/platforms/vk/radix_sort_vk.h"
+#include "radix_sort/radix_sort_vk.h"
 static
 #include "build/i64_u32_init.comp.h"
   static

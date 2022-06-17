@@ -12,7 +12,7 @@
 #include "common/util.h"
 #include "common/vk/assert.h"
 #include "common/vk/barrier.h"
-#include "radix_sort/platforms/vk/radix_sort_vk_devaddr.h"
+#include "radix_sort/radix_sort_vk_devaddr.h"
 #include "shaders/push.h"
 #include "target.h"
 
