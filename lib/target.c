@@ -4,45 +4,45 @@
 #include "common/util.h"
 #include "radix_sort/radix_sort_vk.h"
 static
-#include "build/i64_u32_init.comp.h"
+#include "i64_u32_init.comp.h"
   static
-#include "build/i64_u64_init.comp.h"
+#include "i64_u64_init.comp.h"
   static
-#include "build/noi64_u32_init.comp.h"
+#include "noi64_u32_init.comp.h"
   static
-#include "build/noi64_u64_init.comp.h"
+#include "noi64_u64_init.comp.h"
   static
-#include "build/i64_u32_fill.comp.h"
+#include "i64_u32_fill.comp.h"
   static
-#include "build/i64_u64_fill.comp.h"
+#include "i64_u64_fill.comp.h"
   static
-#include "build/noi64_u32_fill.comp.h"
+#include "noi64_u32_fill.comp.h"
   static
-#include "build/noi64_u64_fill.comp.h"
+#include "noi64_u64_fill.comp.h"
   static
-#include "build/i64_u32_histogram.comp.h"
+#include "i64_u32_histogram.comp.h"
   static
-#include "build/i64_u64_histogram.comp.h"
+#include "i64_u64_histogram.comp.h"
   static
-#include "build/noi64_u32_histogram.comp.h"
+#include "noi64_u32_histogram.comp.h"
   static
-#include "build/noi64_u64_histogram.comp.h"
+#include "noi64_u64_histogram.comp.h"
   static
-#include "build/i64_u32_prefix.comp.h"
+#include "i64_u32_prefix.comp.h"
   static
-#include "build/i64_u64_prefix.comp.h"
+#include "i64_u64_prefix.comp.h"
   static
-#include "build/noi64_u32_prefix.comp.h"
+#include "noi64_u32_prefix.comp.h"
   static
-#include "build/noi64_u64_prefix.comp.h"
+#include "noi64_u64_prefix.comp.h"
   static
-#include "build/i64_u32_scatter.comp.h"
+#include "i64_u32_scatter.comp.h"
   static
-#include "build/i64_u64_scatter.comp.h"
+#include "i64_u64_scatter.comp.h"
   static
-#include "build/noi64_u32_scatter.comp.h"
+#include "noi64_u32_scatter.comp.h"
   static
-#include "build/noi64_u64_scatter.comp.h"
+#include "noi64_u64_scatter.comp.h"
 
   extern const struct radix_sort_vk_target gcn3_u32_target;
 extern const struct radix_sort_vk_target   gcn3_u64_target;
