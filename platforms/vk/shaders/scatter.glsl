@@ -42,8 +42,8 @@
 // Buffer reference macros and push constants
 //
 #include "bufref.h"
-#include "push.h"
 #include "constants.h"
+#include "push.h"
 
 //
 // Push constants for scatter shader
@@ -297,7 +297,15 @@ shared rs_scatter_smem smem;
 // The shared memory barrier is either subgroup-wide or
 // workgroup-wide.
 //
-#define RS_BARRIER() if(RS_WORKGROUP_SUBGROUPS == 1) { subgroupBarrier(); } else { barrier(); }
+#define RS_BARRIER()                                                                               \
+  if (RS_WORKGROUP_SUBGROUPS == 1)                                                                 \
+    {                                                                                              \
+      subgroupBarrier();                                                                           \
+    }                                                                                              \
+  else                                                                                             \
+    {                                                                                              \
+      barrier();                                                                                   \
+    }
 
 //
 // If multi-subgroup then define shared memory
@@ -337,54 +345,50 @@ shared rs_scatter_smem smem;
 void
 rs_histogram_zero()
 {
-if (RS_WORKGROUP_SUBGROUPS == 1)
-{
-  const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
-  {
-    smem.extent[smem_offset + ii] = 0;
-  }
-}
-else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-{
-
-  const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
-  {
-    smem.extent[smem_offset + ii] = 0;
-  }
-
-if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
-{
-  const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
-
-  if (smem_offset_final < RS_RADIX_SIZE)
+  if (RS_WORKGROUP_SUBGROUPS == 1)
     {
-      smem.extent[smem_offset_final] = 0;
+      const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID;
+
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
+      {
+        smem.extent[smem_offset + ii] = 0;
+      }
     }
-}
-
-}
-else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-{
-
-if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
-{
-  if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
+  else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
     {
-      smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x] = 0;
-    }
-}
-else
-{
-    {
-      smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x] = 0;
-    }
-}
+      const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x;
 
-}
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
+      {
+        smem.extent[smem_offset + ii] = 0;
+      }
+
+      if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+        {
+          const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
+
+          if (smem_offset_final < RS_RADIX_SIZE)
+            {
+              smem.extent[smem_offset_final] = 0;
+            }
+        }
+    }
+  else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+    {
+      if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+        {
+          if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
+            {
+              smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x] = 0;
+            }
+        }
+      else
+        {
+          {
+            smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x] = 0;
+          }
+        }
+    }
 
   RS_BARRIER();
 }
@@ -410,78 +414,76 @@ rs_histogram_rank(const RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS],
   // Default is to emulate a `match` operation with ballots.
   //
   //----------------------------------------------------------------------
-if (RS_SCATTER_ENABLE_BROADCAST_MATCH == 0)
-{
-
-  //
-  // 64
-  //
-if (RS_SUBGROUP_SIZE == 64)
-{
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
-  {
-    const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
-
-    u32vec2 match;
-
+  if (RS_SCATTER_ENABLE_BROADCAST_MATCH == 0)
     {
-      const bool     is_one = RS_BIT_IS_ONE(digit, 0);
-      const u32vec2  ballot = subgroupBallot(is_one).xy;
-      const uint32_t mask   = is_one ? 0 : 0xFFFFFFFF;
+      //
+      // 64
+      //
+      if (RS_SUBGROUP_SIZE == 64)
+        {
+          [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
+          {
+            const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
 
-      match.x = (ballot.x ^ mask);
-      match.y = (ballot.y ^ mask);
+            u32vec2 match;
+
+            {
+              const bool     is_one = RS_BIT_IS_ONE(digit, 0);
+              const u32vec2  ballot = subgroupBallot(is_one).xy;
+              const uint32_t mask   = is_one ? 0 : 0xFFFFFFFF;
+
+              match.x = (ballot.x ^ mask);
+              match.y = (ballot.y ^ mask);
+            }
+
+            [[unroll]] for (int32_t bit = 1; bit < RS_RADIX_LOG2; bit++)
+            {
+              const bool     is_one = RS_BIT_IS_ONE(digit, bit);
+              const u32vec2  ballot = subgroupBallot(is_one).xy;
+              const uint32_t mask   = is_one ? 0 : 0xFFFFFFFF;
+
+              match.x &= (ballot.x ^ mask);
+              match.y &= (ballot.y ^ mask);
+            }
+
+            kr[ii] = ((bitCount(match.x) + bitCount(match.y)) << 16) |
+                     (bitCount(match.x & gl_SubgroupLeMask.x) +  //
+                      bitCount(match.y & gl_SubgroupLeMask.y));
+          }
+
+          //
+          // <= 32
+          //
+        }
+      else if (RS_SUBGROUP_SIZE <= 32)
+        {
+          [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
+          {
+            const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
+
+            uint32_t match;
+
+            {
+              const bool     is_one = RS_BIT_IS_ONE(digit, 0);
+              const uint32_t ballot = subgroupBallot(is_one).x;
+              const uint32_t mask   = is_one ? 0 : RS_SUBGROUP_MASK;
+
+              match = (ballot ^ mask);
+            }
+
+            [[unroll]] for (int32_t bit = 1; bit < RS_RADIX_LOG2; bit++)
+            {
+              const bool     is_one = RS_BIT_IS_ONE(digit, bit);
+              const uint32_t ballot = subgroupBallot(is_one).x;
+              const uint32_t mask   = is_one ? 0 : RS_SUBGROUP_MASK;
+
+              match &= (ballot ^ mask);
+            }
+
+            kr[ii] = (bitCount(match) << 16) | bitCount(match & gl_SubgroupLeMask.x);
+          }
+        }
     }
-
-    [[unroll]] for (int32_t bit = 1; bit < RS_RADIX_LOG2; bit++)
-    {
-      const bool     is_one = RS_BIT_IS_ONE(digit, bit);
-      const u32vec2  ballot = subgroupBallot(is_one).xy;
-      const uint32_t mask   = is_one ? 0 : 0xFFFFFFFF;
-
-      match.x &= (ballot.x ^ mask);
-      match.y &= (ballot.y ^ mask);
-    }
-
-    kr[ii] = ((bitCount(match.x) + bitCount(match.y)) << 16) |
-             (bitCount(match.x & gl_SubgroupLeMask.x) +  //
-              bitCount(match.y & gl_SubgroupLeMask.y));
-  }
-
-  //
-  // <= 32
-  //
-}
-else if (RS_SUBGROUP_SIZE <= 32)
-{
-  [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
-  {
-    const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
-
-    uint32_t match;
-
-    {
-      const bool     is_one = RS_BIT_IS_ONE(digit, 0);
-      const uint32_t ballot = subgroupBallot(is_one).x;
-      const uint32_t mask   = is_one ? 0 : RS_SUBGROUP_MASK;
-
-      match = (ballot ^ mask);
-    }
-
-    [[unroll]] for (int32_t bit = 1; bit < RS_RADIX_LOG2; bit++)
-    {
-      const bool     is_one = RS_BIT_IS_ONE(digit, bit);
-      const uint32_t ballot = subgroupBallot(is_one).x;
-      const uint32_t mask   = is_one ? 0 : RS_SUBGROUP_MASK;
-
-      match &= (ballot ^ mask);
-    }
-
-    kr[ii] = (bitCount(match) << 16) | bitCount(match & gl_SubgroupLeMask.x);
-  }
-}
-}
 
   //----------------------------------------------------------------------
   //
@@ -490,70 +492,69 @@ else if (RS_SUBGROUP_SIZE <= 32)
   // In general, using broadcasts is a win for narrow subgroups.
   //
   //----------------------------------------------------------------------
-else
-{
-
-  //
-  // 64
-  //
-if (RS_SUBGROUP_SIZE == 64)
-{
-  [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
-  {
-    const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
-
-    u32vec2 match;
-
-    // subgroup invocation 0
+  else
     {
-      match[0] = (subgroupBroadcast(digit, 0) == digit) ? (1u << 0) : 0;
+      //
+      // 64
+      //
+      if (RS_SUBGROUP_SIZE == 64)
+        {
+          [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
+          {
+            const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
+
+            u32vec2 match;
+
+            // subgroup invocation 0
+            {
+              match[0] = (subgroupBroadcast(digit, 0) == digit) ? (1u << 0) : 0;
+            }
+
+            // subgroup invocations 1-31
+            [[unroll]] for (int32_t jj = 1; jj < 32; jj++)
+            {
+              match[0] |= (subgroupBroadcast(digit, jj) == digit) ? (1u << jj) : 0;
+            }
+
+            // subgroup invocation 32
+            {
+              match[1] = (subgroupBroadcast(digit, 32) == digit) ? (1u << 0) : 0;
+            }
+
+            // subgroup invocations 33-63
+            [[unroll]] for (int32_t jj = 1; jj < 32; jj++)
+            {
+              match[1] |= (subgroupBroadcast(digit, jj) == digit) ? (1u << jj) : 0;
+            }
+
+            kr[ii] = ((bitCount(match.x) + bitCount(match.y)) << 16) |
+                     (bitCount(match.x & gl_SubgroupLeMask.x) +  //
+                      bitCount(match.y & gl_SubgroupLeMask.y));
+          }
+
+          //
+          // <= 32
+          //
+        }
+      else if (RS_SUBGROUP_SIZE <= 32)
+        {
+          [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
+          {
+            const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
+
+            // subgroup invocation 0
+            uint32_t match = (subgroupBroadcast(digit, 0) == digit) ? (1u << 0) : 0;
+
+            // subgroup invocations 1-(RS_SUBGROUP_SIZE-1)
+            [[unroll]] for (int32_t jj = 1; jj < RS_SUBGROUP_SIZE; jj++)
+            {
+              match |= (subgroupBroadcast(digit, jj) == digit) ? (1u << jj) : 0;
+            }
+
+            kr[ii] = (bitCount(match) << 16) | bitCount(match & gl_SubgroupLeMask.x);
+          }
+        }
     }
-
-    // subgroup invocations 1-31
-    [[unroll]] for (int32_t jj = 1; jj < 32; jj++)
-    {
-      match[0] |= (subgroupBroadcast(digit, jj) == digit) ? (1u << jj) : 0;
-    }
-
-    // subgroup invocation 32
-    {
-      match[1] = (subgroupBroadcast(digit, 32) == digit) ? (1u << 0) : 0;
-    }
-
-    // subgroup invocations 33-63
-    [[unroll]] for (int32_t jj = 1; jj < 32; jj++)
-    {
-      match[1] |= (subgroupBroadcast(digit, jj) == digit) ? (1u << jj) : 0;
-    }
-
-    kr[ii] = ((bitCount(match.x) + bitCount(match.y)) << 16) |
-             (bitCount(match.x & gl_SubgroupLeMask.x) +  //
-              bitCount(match.y & gl_SubgroupLeMask.y));
-  }
-
-  //
-  // <= 32
-  //
-}
-else if (RS_SUBGROUP_SIZE <= 32)
-{
-  [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
-  {
-    const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
-
-    // subgroup invocation 0
-    uint32_t match = (subgroupBroadcast(digit, 0) == digit) ? (1u << 0) : 0;
-
-    // subgroup invocations 1-(RS_SUBGROUP_SIZE-1)
-    [[unroll]] for (int32_t jj = 1; jj < RS_SUBGROUP_SIZE; jj++)
-    {
-      match |= (subgroupBroadcast(digit, jj) == digit) ? (1u << jj) : 0;
-    }
-
-    kr[ii] = (bitCount(match) << 16) | bitCount(match & gl_SubgroupLeMask.x);
-  }
-}
-}
 
   //
   // This is a little unconventional but cycling through a subgroup at
@@ -598,127 +599,126 @@ rs_first_prefix_store(restrict buffer_rs_partitions rs_partitions)
   //
   // Define the histogram reference
   //
-  const uint32_t hist_offset = (RS_WORKGROUP_SUBGROUPS == 1) ?
-    gl_SubgroupInvocationID * 4 : gl_LocalInvocationID.x * 4;
+  const uint32_t hist_offset =
+    (RS_WORKGROUP_SUBGROUPS == 1) ? gl_SubgroupInvocationID * 4 : gl_LocalInvocationID.x * 4;
 
   readonly RS_BUFREF_DEFINE_AT_OFFSET_UINT32(buffer_rs_histogram,
                                              rs_histogram,
                                              push.devaddr_histograms,
                                              hist_offset);
 
-if (RS_WORKGROUP_SUBGROUPS == 1)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SUBGROUPS == 1)
-  //
-  const uint32_t smem_offset_h = RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID;
-  const uint32_t smem_offset_l = RS_SMEM_LOOKBACK_OFFSET + gl_SubgroupInvocationID;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
-  {
-    const uint32_t exc = rs_histogram.extent[ii];
-    const uint32_t red = smem.extent[smem_offset_h + ii];
-
-    smem.extent[smem_offset_l + ii] = exc;
-
-    const uint32_t inc = exc + red;
-
-    atomicStore(rs_partitions.extent[ii],
-                inc | RS_PARTITION_MASK_PREFIX,
-                gl_ScopeQueueFamily,
-                gl_StorageSemanticsBuffer,
-                gl_SemanticsRelease);
-  }
-}
-else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-  //
-  const uint32_t smem_offset_h = RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x;
-  const uint32_t smem_offset_l = RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
-  {
-    const uint32_t exc = rs_histogram.extent[ii];
-    const uint32_t red = smem.extent[smem_offset_h + ii];
-
-    smem.extent[smem_offset_l + ii] = exc;
-
-    const uint32_t inc = exc + red;
-
-    atomicStore(rs_partitions.extent[ii],
-                inc | RS_PARTITION_MASK_PREFIX,
-                gl_ScopeQueueFamily,
-                gl_StorageSemanticsBuffer,
-                gl_SemanticsRelease);
-  }
-
-if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
-{
-  const uint32_t smem_offset_final_h = smem_offset_h + RS_WORKGROUP_BASE_FINAL;
-  const uint32_t smem_offset_final_l = smem_offset_l + RS_WORKGROUP_BASE_FINAL;
-
-  if (smem_offset_final_h < RS_RADIX_SIZE && smem_offset_final_l < RS_RADIX_SIZE)
+  if (RS_WORKGROUP_SUBGROUPS == 1)
     {
-      const uint32_t exc = rs_histogram.extent[RS_WORKGROUP_BASE_FINAL];
-      const uint32_t red = smem.extent[smem_offset_final_h];
+      ////////////////////////////////////////////////////////////////////////////
+      //
+      // (RS_WORKGROUP_SUBGROUPS == 1)
+      //
+      const uint32_t smem_offset_h = RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID;
+      const uint32_t smem_offset_l = RS_SMEM_LOOKBACK_OFFSET + gl_SubgroupInvocationID;
 
-      smem.extent[smem_offset_final_l] = exc;
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
+      {
+        const uint32_t exc = rs_histogram.extent[ii];
+        const uint32_t red = smem.extent[smem_offset_h + ii];
 
-      const uint32_t inc = exc + red;
+        smem.extent[smem_offset_l + ii] = exc;
 
-      atomicStore(rs_partitions.extent[RS_WORKGROUP_BASE_FINAL],
-                  inc | RS_PARTITION_MASK_PREFIX,
-                  gl_ScopeQueueFamily,
-                  gl_StorageSemanticsBuffer,
-                  gl_SemanticsRelease);
+        const uint32_t inc = exc + red;
+
+        atomicStore(rs_partitions.extent[ii],
+                    inc | RS_PARTITION_MASK_PREFIX,
+                    gl_ScopeQueueFamily,
+                    gl_StorageSemanticsBuffer,
+                    gl_SemanticsRelease);
+      }
     }
-}
-}
-else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-  //
-if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
-{
-  if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
+  else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
     {
-      const uint32_t exc = rs_histogram.extent[0];
-      const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
+      ////////////////////////////////////////////////////////////////////////////
+      //
+      // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+      //
+      const uint32_t smem_offset_h = RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x;
+      const uint32_t smem_offset_l = RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x;
 
-      smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
+      {
+        const uint32_t exc = rs_histogram.extent[ii];
+        const uint32_t red = smem.extent[smem_offset_h + ii];
 
-      const uint32_t inc = exc + red;
+        smem.extent[smem_offset_l + ii] = exc;
 
-      atomicStore(rs_partitions.extent[0],
-                  inc | RS_PARTITION_MASK_PREFIX,
-                  gl_ScopeQueueFamily,
-                  gl_StorageSemanticsBuffer,
-                  gl_SemanticsRelease);
+        const uint32_t inc = exc + red;
+
+        atomicStore(rs_partitions.extent[ii],
+                    inc | RS_PARTITION_MASK_PREFIX,
+                    gl_ScopeQueueFamily,
+                    gl_StorageSemanticsBuffer,
+                    gl_SemanticsRelease);
+      }
+
+      if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+        {
+          const uint32_t smem_offset_final_h = smem_offset_h + RS_WORKGROUP_BASE_FINAL;
+          const uint32_t smem_offset_final_l = smem_offset_l + RS_WORKGROUP_BASE_FINAL;
+
+          if (smem_offset_final_h < RS_RADIX_SIZE && smem_offset_final_l < RS_RADIX_SIZE)
+            {
+              const uint32_t exc = rs_histogram.extent[RS_WORKGROUP_BASE_FINAL];
+              const uint32_t red = smem.extent[smem_offset_final_h];
+
+              smem.extent[smem_offset_final_l] = exc;
+
+              const uint32_t inc = exc + red;
+
+              atomicStore(rs_partitions.extent[RS_WORKGROUP_BASE_FINAL],
+                          inc | RS_PARTITION_MASK_PREFIX,
+                          gl_ScopeQueueFamily,
+                          gl_StorageSemanticsBuffer,
+                          gl_SemanticsRelease);
+            }
+        }
     }
-}
-else
+  else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
     {
-      const uint32_t exc = rs_histogram.extent[0];
-      const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
+      ////////////////////////////////////////////////////////////////////////////
+      //
+      // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+      //
+      if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+        {
+          if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
+            {
+              const uint32_t exc = rs_histogram.extent[0];
+              const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
 
-      smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
+              smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
 
-      const uint32_t inc = exc + red;
+              const uint32_t inc = exc + red;
 
-      atomicStore(rs_partitions.extent[0],
-                  inc | RS_PARTITION_MASK_PREFIX,
-                  gl_ScopeQueueFamily,
-                  gl_StorageSemanticsBuffer,
-                  gl_SemanticsRelease);
+              atomicStore(rs_partitions.extent[0],
+                          inc | RS_PARTITION_MASK_PREFIX,
+                          gl_ScopeQueueFamily,
+                          gl_StorageSemanticsBuffer,
+                          gl_SemanticsRelease);
+            }
+        }
+      else
+        {
+          const uint32_t exc = rs_histogram.extent[0];
+          const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
+
+          smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
+
+          const uint32_t inc = exc + red;
+
+          atomicStore(rs_partitions.extent[0],
+                      inc | RS_PARTITION_MASK_PREFIX,
+                      gl_ScopeQueueFamily,
+                      gl_StorageSemanticsBuffer,
+                      gl_SemanticsRelease);
+        }
     }
-}
-
 }
 
 //
@@ -728,90 +728,90 @@ void
 rs_reduction_store(restrict buffer_rs_partitions      rs_partitions,
                    RS_SUBGROUP_UNIFORM const uint32_t partition_base)
 {
-if (RS_WORKGROUP_SUBGROUPS == 1)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SUBGROUPS == 1)
-  //
-  const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
-  {
-    const uint32_t red = smem.extent[smem_offset + ii];
-
-    atomicStore(rs_partitions.extent[partition_base + ii],
-                red | RS_PARTITION_MASK_REDUCTION,
-                gl_ScopeQueueFamily,
-                gl_StorageSemanticsBuffer,
-                gl_SemanticsRelease);
-  }
-}
-else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-  //
-  const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
-  {
-    const uint32_t red = smem.extent[smem_offset + ii];
-
-    atomicStore(rs_partitions.extent[partition_base + ii],
-                red | RS_PARTITION_MASK_REDUCTION,
-                gl_ScopeQueueFamily,
-                gl_StorageSemanticsBuffer,
-                gl_SemanticsRelease);
-  }
-
-if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
-{
-  const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
-
-  if (smem_offset_final < RS_RADIX_SIZE)
+  if (RS_WORKGROUP_SUBGROUPS == 1)
     {
-      const uint32_t red = smem.extent[smem_offset_final];
+      ////////////////////////////////////////////////////////////////////////////
+      //
+      // (RS_WORKGROUP_SUBGROUPS == 1)
+      //
+      const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID;
 
-      atomicStore(rs_partitions.extent[partition_base + RS_WORKGROUP_BASE_FINAL],
-                  red | RS_PARTITION_MASK_REDUCTION,
-                  gl_ScopeQueueFamily,
-                  gl_StorageSemanticsBuffer,
-                  gl_SemanticsRelease);
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
+      {
+        const uint32_t red = smem.extent[smem_offset + ii];
+
+        atomicStore(rs_partitions.extent[partition_base + ii],
+                    red | RS_PARTITION_MASK_REDUCTION,
+                    gl_ScopeQueueFamily,
+                    gl_StorageSemanticsBuffer,
+                    gl_SemanticsRelease);
+      }
     }
-}
-}
-else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-  //
-if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
-{
-  if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
+  else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
     {
-      const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
+      ////////////////////////////////////////////////////////////////////////////
+      //
+      // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+      //
+      const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x;
 
-      atomicStore(rs_partitions.extent[partition_base],
-                  red | RS_PARTITION_MASK_REDUCTION,
-                  gl_ScopeQueueFamily,
-                  gl_StorageSemanticsBuffer,
-                  gl_SemanticsRelease);
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
+      {
+        const uint32_t red = smem.extent[smem_offset + ii];
+
+        atomicStore(rs_partitions.extent[partition_base + ii],
+                    red | RS_PARTITION_MASK_REDUCTION,
+                    gl_ScopeQueueFamily,
+                    gl_StorageSemanticsBuffer,
+                    gl_SemanticsRelease);
+      }
+
+      if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+        {
+          const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
+
+          if (smem_offset_final < RS_RADIX_SIZE)
+            {
+              const uint32_t red = smem.extent[smem_offset_final];
+
+              atomicStore(rs_partitions.extent[partition_base + RS_WORKGROUP_BASE_FINAL],
+                          red | RS_PARTITION_MASK_REDUCTION,
+                          gl_ScopeQueueFamily,
+                          gl_StorageSemanticsBuffer,
+                          gl_SemanticsRelease);
+            }
+        }
     }
-}
-else
-{
-    const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
+  else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+    {
+      ////////////////////////////////////////////////////////////////////////////
+      //
+      // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+      //
+      if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+        {
+          if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
+            {
+              const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
 
-    atomicStore(rs_partitions.extent[partition_base],
-                red | RS_PARTITION_MASK_REDUCTION,
-                gl_ScopeQueueFamily,
-                gl_StorageSemanticsBuffer,
-                gl_SemanticsRelease);
-}
-}
+              atomicStore(rs_partitions.extent[partition_base],
+                          red | RS_PARTITION_MASK_REDUCTION,
+                          gl_ScopeQueueFamily,
+                          gl_StorageSemanticsBuffer,
+                          gl_SemanticsRelease);
+            }
+        }
+      else
+        {
+          const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
+
+          atomicStore(rs_partitions.extent[partition_base],
+                      red | RS_PARTITION_MASK_REDUCTION,
+                      gl_ScopeQueueFamily,
+                      gl_StorageSemanticsBuffer,
+                      gl_SemanticsRelease);
+        }
+    }
 }
 
 //
@@ -827,225 +827,225 @@ void
 rs_lookback_store(restrict buffer_rs_partitions      rs_partitions,
                   RS_SUBGROUP_UNIFORM const uint32_t partition_base)
 {
-if (RS_WORKGROUP_SUBGROUPS == 1)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SUBGROUPS == 1)
-  //
-  const uint32_t smem_offset = RS_SMEM_LOOKBACK_OFFSET + gl_SubgroupInvocationID;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
-  {
-    uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
-    uint32_t exc                 = 0;
-
-    //
-    // NOTE: Each workgroup invocation can proceed independently.
-    // Subgroups and workgroups do NOT have to coordinate.
-    //
-    while (true)
-      {
-        const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
-                                         gl_ScopeQueueFamily,
-                                         gl_StorageSemanticsBuffer,
-                                         gl_SemanticsAcquire);
-
-        // spin until valid
-        if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
-          {
-            continue;
-          }
-
-        exc += (prev & RS_PARTITION_MASK_COUNT);
-
-        if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
-          {
-            // continue accumulating reductions
-            partition_base_prev -= RS_RADIX_SIZE;
-            continue;
-          }
-
-        //
-        // Otherwise, save the exclusive scan and atomically transform
-        // the reduction into an inclusive prefix status math:
-        //
-        //   reduction + 1 = prefix
-        //
-        smem.extent[smem_offset + ii] = exc;
-
-        atomicAdd(rs_partitions.extent[partition_base + ii],
-                  exc | (1 << 30),
-                  gl_ScopeQueueFamily,
-                  gl_StorageSemanticsBuffer,
-                  gl_SemanticsAcquireRelease);
-        break;
-      }
-  }
-}
-else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-  //
-  const uint32_t smem_offset = RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
-  {
-    uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
-    uint32_t exc                 = 0;
-
-    //
-    // NOTE: Each workgroup invocation can proceed independently.
-    // Subgroups and workgroups do NOT have to coordinate.
-    //
-    while (true)
-      {
-        const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
-                                         gl_ScopeQueueFamily,
-                                         gl_StorageSemanticsBuffer,
-                                         gl_SemanticsAcquire);
-
-        // spin until valid
-        if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
-          {
-            continue;
-          }
-
-        exc += (prev & RS_PARTITION_MASK_COUNT);
-
-        if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
-          {
-            // continue accumulating reductions
-            partition_base_prev -= RS_RADIX_SIZE;
-            continue;
-          }
-
-        //
-        // Otherwise, save the exclusive scan and atomically transform
-        // the reduction into an inclusive prefix status math:
-        //
-        //   reduction + 1 = prefix
-        //
-        smem.extent[smem_offset + ii] = exc;
-
-        atomicAdd(rs_partitions.extent[partition_base + ii],
-                  exc | (1 << 30),
-                  gl_ScopeQueueFamily,
-                  gl_StorageSemanticsBuffer,
-                  gl_SemanticsAcquireRelease);
-        break;
-      }
-  }
-
-if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
-{
-  const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
-
-  if (smem_offset_final < RS_SMEM_LOOKBACK_OFFSET + RS_RADIX_SIZE)
+  if (RS_WORKGROUP_SUBGROUPS == 1)
     {
-      uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
-      uint32_t exc                 = 0;
+      ////////////////////////////////////////////////////////////////////////////
+      //
+      // (RS_WORKGROUP_SUBGROUPS == 1)
+      //
+      const uint32_t smem_offset = RS_SMEM_LOOKBACK_OFFSET + gl_SubgroupInvocationID;
 
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
+      {
+        uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
+        uint32_t exc                 = 0;
+
+        //
+        // NOTE: Each workgroup invocation can proceed independently.
+        // Subgroups and workgroups do NOT have to coordinate.
+        //
+        while (true)
+          {
+            const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
+                                             gl_ScopeQueueFamily,
+                                             gl_StorageSemanticsBuffer,
+                                             gl_SemanticsAcquire);
+
+            // spin until valid
+            if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+              {
+                continue;
+              }
+
+            exc += (prev & RS_PARTITION_MASK_COUNT);
+
+            if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
+              {
+                // continue accumulating reductions
+                partition_base_prev -= RS_RADIX_SIZE;
+                continue;
+              }
+
+            //
+            // Otherwise, save the exclusive scan and atomically transform
+            // the reduction into an inclusive prefix status math:
+            //
+            //   reduction + 1 = prefix
+            //
+            smem.extent[smem_offset + ii] = exc;
+
+            atomicAdd(rs_partitions.extent[partition_base + ii],
+                      exc | (1 << 30),
+                      gl_ScopeQueueFamily,
+                      gl_StorageSemanticsBuffer,
+                      gl_SemanticsAcquireRelease);
+            break;
+          }
+      }
+    }
+  else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+    {
+      ////////////////////////////////////////////////////////////////////////////
       //
-      // NOTE: Each workgroup invocation can proceed independently.
-      // Subgroups and workgroups do NOT have to coordinate.
+      // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
       //
-      while (true)
+      const uint32_t smem_offset = RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x;
+
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
+      {
+        uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
+        uint32_t exc                 = 0;
+
+        //
+        // NOTE: Each workgroup invocation can proceed independently.
+        // Subgroups and workgroups do NOT have to coordinate.
+        //
+        while (true)
+          {
+            const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
+                                             gl_ScopeQueueFamily,
+                                             gl_StorageSemanticsBuffer,
+                                             gl_SemanticsAcquire);
+
+            // spin until valid
+            if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+              {
+                continue;
+              }
+
+            exc += (prev & RS_PARTITION_MASK_COUNT);
+
+            if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
+              {
+                // continue accumulating reductions
+                partition_base_prev -= RS_RADIX_SIZE;
+                continue;
+              }
+
+            //
+            // Otherwise, save the exclusive scan and atomically transform
+            // the reduction into an inclusive prefix status math:
+            //
+            //   reduction + 1 = prefix
+            //
+            smem.extent[smem_offset + ii] = exc;
+
+            atomicAdd(rs_partitions.extent[partition_base + ii],
+                      exc | (1 << 30),
+                      gl_ScopeQueueFamily,
+                      gl_StorageSemanticsBuffer,
+                      gl_SemanticsAcquireRelease);
+            break;
+          }
+      }
+
+      if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
         {
-          const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev],
-                                           gl_ScopeQueueFamily,
-                                           gl_StorageSemanticsBuffer,
-                                           gl_SemanticsAcquire);
+          const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
 
-          // spin until valid
-          if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+          if (smem_offset_final < RS_SMEM_LOOKBACK_OFFSET + RS_RADIX_SIZE)
             {
-              continue;
+              uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
+              uint32_t exc                 = 0;
+
+              //
+              // NOTE: Each workgroup invocation can proceed independently.
+              // Subgroups and workgroups do NOT have to coordinate.
+              //
+              while (true)
+                {
+                  const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev],
+                                                   gl_ScopeQueueFamily,
+                                                   gl_StorageSemanticsBuffer,
+                                                   gl_SemanticsAcquire);
+
+                  // spin until valid
+                  if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+                    {
+                      continue;
+                    }
+
+                  exc += (prev & RS_PARTITION_MASK_COUNT);
+
+                  if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
+                    {
+                      // continue accumulating reductions
+                      partition_base_prev -= RS_RADIX_SIZE;
+                      continue;
+                    }
+
+                  //
+                  // Otherwise, save the exclusive scan and atomically transform
+                  // the reduction into an inclusive prefix status math:
+                  //
+                  //   reduction + 1 = prefix
+                  //
+                  smem.extent[smem_offset] = exc;
+
+                  atomicAdd(rs_partitions.extent[partition_base + RS_WORKGROUP_BASE_FINAL],
+                            exc | (1 << 30),
+                            gl_ScopeQueueFamily,
+                            gl_StorageSemanticsBuffer,
+                            gl_SemanticsAcquireRelease);
+                  break;
+                }
             }
-
-          exc += (prev & RS_PARTITION_MASK_COUNT);
-
-          if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
-            {
-              // continue accumulating reductions
-              partition_base_prev -= RS_RADIX_SIZE;
-              continue;
-            }
-
-          //
-          // Otherwise, save the exclusive scan and atomically transform
-          // the reduction into an inclusive prefix status math:
-          //
-          //   reduction + 1 = prefix
-          //
-          smem.extent[smem_offset] = exc;
-
-          atomicAdd(rs_partitions.extent[partition_base + RS_WORKGROUP_BASE_FINAL],
-                    exc | (1 << 30),
-                    gl_ScopeQueueFamily,
-                    gl_StorageSemanticsBuffer,
-                    gl_SemanticsAcquireRelease);
-          break;
         }
     }
-}
-}
-else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-  //
-  if (RS_WORKGROUP_SIZE == RS_RADIX_SIZE || gl_LocalInvocationID.x < RS_RADIX_SIZE)
+  else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
     {
-      uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
-      uint32_t exc                 = 0;
-
+      ////////////////////////////////////////////////////////////////////////////
       //
-      // NOTE: Each workgroup invocation can proceed independently.
-      // Subgroups and workgroups do NOT have to coordinate.
+      // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
       //
-      while (true)
+      if (RS_WORKGROUP_SIZE == RS_RADIX_SIZE || gl_LocalInvocationID.x < RS_RADIX_SIZE)
         {
-          const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev],
-                                           gl_ScopeQueueFamily,
-                                           gl_StorageSemanticsBuffer,
-                                           gl_SemanticsAcquire);
+          uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
+          uint32_t exc                 = 0;
 
-          // spin until valid
-          if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+          //
+          // NOTE: Each workgroup invocation can proceed independently.
+          // Subgroups and workgroups do NOT have to coordinate.
+          //
+          while (true)
             {
-              continue;
+              const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev],
+                                               gl_ScopeQueueFamily,
+                                               gl_StorageSemanticsBuffer,
+                                               gl_SemanticsAcquire);
+
+              // spin until valid
+              if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+                {
+                  continue;
+                }
+
+              exc += (prev & RS_PARTITION_MASK_COUNT);
+
+              if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
+                {
+                  // continue accumulating reductions
+                  partition_base_prev -= RS_RADIX_SIZE;
+                  continue;
+                }
+
+              //
+              // Otherwise, save the exclusive scan and atomically transform
+              // the reduction into an inclusive prefix status math:
+              //
+              //   reduction + 1 = prefix
+              //
+              smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
+
+              atomicAdd(rs_partitions.extent[partition_base],
+                        exc | (1 << 30),
+                        gl_ScopeQueueFamily,
+                        gl_StorageSemanticsBuffer,
+                        gl_SemanticsAcquireRelease);
+              break;
             }
-
-          exc += (prev & RS_PARTITION_MASK_COUNT);
-
-          if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
-            {
-              // continue accumulating reductions
-              partition_base_prev -= RS_RADIX_SIZE;
-              continue;
-            }
-
-          //
-          // Otherwise, save the exclusive scan and atomically transform
-          // the reduction into an inclusive prefix status math:
-          //
-          //   reduction + 1 = prefix
-          //
-          smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
-
-          atomicAdd(rs_partitions.extent[partition_base],
-                    exc | (1 << 30),
-                    gl_ScopeQueueFamily,
-                    gl_StorageSemanticsBuffer,
-                    gl_SemanticsAcquireRelease);
-          break;
         }
     }
-}
 }
 
 //
@@ -1058,182 +1058,182 @@ void
 rs_lookback_skip_store(restrict buffer_rs_partitions      rs_partitions,
                        RS_SUBGROUP_UNIFORM const uint32_t partition_base)
 {
-if (RS_WORKGROUP_SUBGROUPS == 1)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SUBGROUPS == 1)
-  //
-  const uint32_t smem_offset = RS_SMEM_LOOKBACK_OFFSET + gl_SubgroupInvocationID;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
-  {
-    uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
-    uint32_t exc                 = 0;
-
-    //
-    // NOTE: Each workgroup invocation can proceed independently.
-    // Subgroups and workgroups do NOT have to coordinate.
-    //
-    while (true)
-      {
-        const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
-                                         gl_ScopeQueueFamily,
-                                         gl_StorageSemanticsBuffer,
-                                         gl_SemanticsAcquire);
-
-        // spin until valid
-        if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
-          {
-            continue;
-          }
-
-        exc += (prev & RS_PARTITION_MASK_COUNT);
-
-        if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
-          {
-            // continue accumulating reductions
-            partition_base_prev -= RS_RADIX_SIZE;
-            continue;
-          }
-
-        // Otherwise, save the exclusive scan.
-        smem.extent[smem_offset + ii] = exc;
-        break;
-      }
-  }
-}
-else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
-  //
-  const uint32_t smem_offset = RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x;
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
-  {
-    uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
-    uint32_t exc                 = 0;
-
-    //
-    // NOTE: Each workgroup invocation can proceed independently.
-    // Subgroups and workgroups do NOT have to coordinate.
-    //
-    while (true)
-      {
-        const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
-                                         gl_ScopeQueueFamily,
-                                         gl_StorageSemanticsBuffer,
-                                         gl_SemanticsAcquire);
-
-        // spin until valid
-        if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
-          {
-            continue;
-          }
-
-        exc += (prev & RS_PARTITION_MASK_COUNT);
-
-        if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
-          {
-            // continue accumulating reductions
-            partition_base_prev -= RS_RADIX_SIZE;
-            continue;
-          }
-
-        // Otherwise, save the exclusive scan.
-        smem.extent[smem_offset + ii] = exc;
-        break;
-      }
-  }
-
-if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
-{
-  const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
-
-  if (smem_offset_final < RS_RADIX_SIZE)
+  if (RS_WORKGROUP_SUBGROUPS == 1)
     {
-      uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
-      uint32_t exc                 = 0;
+      ////////////////////////////////////////////////////////////////////////////
+      //
+      // (RS_WORKGROUP_SUBGROUPS == 1)
+      //
+      const uint32_t smem_offset = RS_SMEM_LOOKBACK_OFFSET + gl_SubgroupInvocationID;
 
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
+      {
+        uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
+        uint32_t exc                 = 0;
+
+        //
+        // NOTE: Each workgroup invocation can proceed independently.
+        // Subgroups and workgroups do NOT have to coordinate.
+        //
+        while (true)
+          {
+            const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
+                                             gl_ScopeQueueFamily,
+                                             gl_StorageSemanticsBuffer,
+                                             gl_SemanticsAcquire);
+
+            // spin until valid
+            if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+              {
+                continue;
+              }
+
+            exc += (prev & RS_PARTITION_MASK_COUNT);
+
+            if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
+              {
+                // continue accumulating reductions
+                partition_base_prev -= RS_RADIX_SIZE;
+                continue;
+              }
+
+            // Otherwise, save the exclusive scan.
+            smem.extent[smem_offset + ii] = exc;
+            break;
+          }
+      }
+    }
+  else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+    {
+      ////////////////////////////////////////////////////////////////////////////
       //
-      // NOTE: Each workgroup invocation can proceed independently.
-      // Subgroups and workgroups do NOT have to coordinate.
+      // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
       //
-      while (true)
+      const uint32_t smem_offset = RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x;
+
+      [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_WORKGROUP_SIZE)
+      {
+        uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
+        uint32_t exc                 = 0;
+
+        //
+        // NOTE: Each workgroup invocation can proceed independently.
+        // Subgroups and workgroups do NOT have to coordinate.
+        //
+        while (true)
+          {
+            const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
+                                             gl_ScopeQueueFamily,
+                                             gl_StorageSemanticsBuffer,
+                                             gl_SemanticsAcquire);
+
+            // spin until valid
+            if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+              {
+                continue;
+              }
+
+            exc += (prev & RS_PARTITION_MASK_COUNT);
+
+            if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
+              {
+                // continue accumulating reductions
+                partition_base_prev -= RS_RADIX_SIZE;
+                continue;
+              }
+
+            // Otherwise, save the exclusive scan.
+            smem.extent[smem_offset + ii] = exc;
+            break;
+          }
+      }
+
+      if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
         {
-          const uint32_t prev =
-            atomicLoad(rs_partitions.extent[partition_base_prev + RS_WORKGROUP_BASE_FINAL],
-                       gl_ScopeQueueFamily,
-                       gl_StorageSemanticsBuffer,
-                       gl_SemanticsAcquire);
+          const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
 
-          // spin until valid
-          if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+          if (smem_offset_final < RS_RADIX_SIZE)
             {
-              continue;
+              uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
+              uint32_t exc                 = 0;
+
+              //
+              // NOTE: Each workgroup invocation can proceed independently.
+              // Subgroups and workgroups do NOT have to coordinate.
+              //
+              while (true)
+                {
+                  const uint32_t prev =
+                    atomicLoad(rs_partitions.extent[partition_base_prev + RS_WORKGROUP_BASE_FINAL],
+                               gl_ScopeQueueFamily,
+                               gl_StorageSemanticsBuffer,
+                               gl_SemanticsAcquire);
+
+                  // spin until valid
+                  if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+                    {
+                      continue;
+                    }
+
+                  exc += (prev & RS_PARTITION_MASK_COUNT);
+
+                  if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
+                    {
+                      // continue accumulating reductions
+                      partition_base_prev -= RS_RADIX_SIZE;
+                      continue;
+                    }
+
+                  // Otherwise, save the exclusive scan.
+                  smem.extent[smem_offset_final] = exc;
+                  break;
+                }
             }
-
-          exc += (prev & RS_PARTITION_MASK_COUNT);
-
-          if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
-            {
-              // continue accumulating reductions
-              partition_base_prev -= RS_RADIX_SIZE;
-              continue;
-            }
-
-          // Otherwise, save the exclusive scan.
-          smem.extent[smem_offset_final] = exc;
-          break;
         }
     }
-}
-}
-else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-{
-  ////////////////////////////////////////////////////////////////////////////
-  //
-  // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
-  //
-  if (RS_WORKGROUP_SIZE == RS_RADIX_SIZE || gl_LocalInvocationID.x < RS_RADIX_SIZE)
+  else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
     {
-      uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
-      uint32_t exc                 = 0;
-
+      ////////////////////////////////////////////////////////////////////////////
       //
-      // NOTE: Each workgroup invocation can proceed independently.
-      // Subgroups and workgroups do NOT have to coordinate.
+      // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
       //
-      while (true)
+      if (RS_WORKGROUP_SIZE == RS_RADIX_SIZE || gl_LocalInvocationID.x < RS_RADIX_SIZE)
         {
-          const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev],
-                                           gl_ScopeQueueFamily,
-                                           gl_StorageSemanticsBuffer,
-                                           gl_SemanticsAcquire);
+          uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
+          uint32_t exc                 = 0;
 
-          // spin until valid
-          if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+          //
+          // NOTE: Each workgroup invocation can proceed independently.
+          // Subgroups and workgroups do NOT have to coordinate.
+          //
+          while (true)
             {
-              continue;
+              const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev],
+                                               gl_ScopeQueueFamily,
+                                               gl_StorageSemanticsBuffer,
+                                               gl_SemanticsAcquire);
+
+              // spin until valid
+              if ((prev & RS_PARTITION_MASK_STATUS) == RS_PARTITION_MASK_INVALID)
+                {
+                  continue;
+                }
+
+              exc += (prev & RS_PARTITION_MASK_COUNT);
+
+              if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
+                {
+                  // continue accumulating reductions
+                  partition_base_prev -= RS_RADIX_SIZE;
+                  continue;
+                }
+
+              // Otherwise, save the exclusive scan.
+              smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
+              break;
             }
-
-          exc += (prev & RS_PARTITION_MASK_COUNT);
-
-          if ((prev & RS_PARTITION_MASK_STATUS) != RS_PARTITION_MASK_PREFIX)
-            {
-              // continue accumulating reductions
-              partition_base_prev -= RS_RADIX_SIZE;
-              continue;
-            }
-
-          // Otherwise, save the exclusive scan.
-          smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
-          break;
         }
     }
-}
 }
 
 //
@@ -1535,10 +1535,10 @@ main()
     {
       rs_rank_to_global(kv, kr);
 
-      if(RS_SCATTER_DISABLE_REORDER == 0)
-      {
-        rs_reorder_1(kv, kr);
-      }
+      if (RS_SCATTER_DISABLE_REORDER == 0)
+        {
+          rs_reorder_1(kv, kr);
+        }
 
       rs_store(kv, kr);
     }
@@ -1606,41 +1606,41 @@ main()
             }
         }
 
-if(RS_SCATTER_DISABLE_REORDER == 0)
-{
-      //
-      // Compute exclusive prefix scan of histogram.
-      //
-      // No barrier.
-      //
-      rs_prefix();
+      if (RS_SCATTER_DISABLE_REORDER == 0)
+        {
+          //
+          // Compute exclusive prefix scan of histogram.
+          //
+          // No barrier.
+          //
+          rs_prefix();
 
-      //
-      // Barrier before reading prefix scanned histogram.
-      //
-      RS_BARRIER();
+          //
+          // Barrier before reading prefix scanned histogram.
+          //
+          RS_BARRIER();
 
-      //
-      // Convert keyval's rank to a local index
-      //
-      // Ends with a barrier.
-      //
-      rs_rank_to_local(kv, kr);
+          //
+          // Convert keyval's rank to a local index
+          //
+          // Ends with a barrier.
+          //
+          rs_rank_to_local(kv, kr);
 
-      //
-      // Reorder kv[] and kr[]
-      //
-      // Ends with a barrier.
-      //
-      rs_reorder(kv, kr);
-}
-else
-{
-      //
-      // Wait for lookback to complete.
-      //
-      RS_BARRIER();
-}
+          //
+          // Reorder kv[] and kr[]
+          //
+          // Ends with a barrier.
+          //
+          rs_reorder(kv, kr);
+        }
+      else
+        {
+          //
+          // Wait for lookback to complete.
+          //
+          RS_BARRIER();
+        }
 
       //
       // Convert local index to a global index.

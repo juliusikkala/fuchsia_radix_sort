@@ -69,9 +69,9 @@ struct radix_sort_vk_target_config
 
 struct radix_sort_vk_target_modules
 {
-    uint32_t module_count;
-    uint32_t module_size[8];
-    const uint32_t* module_data[8];
+  uint32_t         module_count;
+  uint32_t         module_size[8];
+  const uint32_t * module_data[8];
 };
 
 //

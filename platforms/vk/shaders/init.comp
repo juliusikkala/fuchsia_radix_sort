@@ -17,8 +17,8 @@
 // Buffer reference macros and push constants
 //
 #include "bufref.h"
-#include "push.h"
 #include "constants.h"
+#include "push.h"
 
 //
 // Subgroup uniform support
