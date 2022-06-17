@@ -399,38 +399,56 @@ radix_sort_vk_create(VkDevice                       device,
     { 10, 10 * sizeof(uint32_t), sizeof(uint32_t) },  // RS_SCATTER_ENABLE_BROADCAST_MATCH
     { 11, 11 * sizeof(uint32_t), sizeof(uint32_t) },  // RS_HISTOGRAM_DISABLE_SMEM_HISTOGRAM
     { 12, 12 * sizeof(uint32_t), sizeof(uint32_t) },  // RS_SCATTER_DISABLE_REORDER
-    { 13, 13 * sizeof(uint32_t), sizeof(uint32_t) }   // RS_SCATTER_KEYVAL_DWORD_BASE
+    { 13, 13 * sizeof(uint32_t), sizeof(uint32_t) },  // RS_SCATTER_KEYVAL_DWORD_BASE
+    { 14, 14 * sizeof(uint32_t), sizeof(uint32_t) }   // RS_SCATTER_EVEN
   };
 
-  uint32_t spec_data_scatter0[] = { 1 << rs->config.fill.workgroup_size_log2,
-                                    rs->config.fill.block_rows,
-                                    1 << rs->config.histogram.workgroup_size_log2,
-                                    1 << rs->config.histogram.subgroup_size_log2,
-                                    rs->config.histogram.block_rows,
-                                    1 << rs->config.prefix.workgroup_size_log2,
-                                    1 << rs->config.prefix.subgroup_size_log2,
-                                    1 << rs->config.scatter.workgroup_size_log2,
-                                    1 << rs->config.scatter.subgroup_size_log2,
-                                    rs->config.scatter.block_rows,
-                                    rs->config.scatter.enable_broadcast,
-                                    rs->config.histogram.disable_smem_histogram,
-                                    rs->config.scatter.disable_reorder,
-                                    0 };
+  uint32_t spec_data_scatter0_even[] = { 1 << rs->config.fill.workgroup_size_log2,
+                                         rs->config.fill.block_rows,
+                                         1 << rs->config.histogram.workgroup_size_log2,
+                                         1 << rs->config.histogram.subgroup_size_log2,
+                                         rs->config.histogram.block_rows,
+                                         1 << rs->config.prefix.workgroup_size_log2,
+                                         1 << rs->config.prefix.subgroup_size_log2,
+                                         1 << rs->config.scatter.workgroup_size_log2,
+                                         1 << rs->config.scatter.subgroup_size_log2,
+                                         rs->config.scatter.block_rows,
+                                         rs->config.scatter.enable_broadcast,
+                                         rs->config.histogram.disable_smem_histogram,
+                                         rs->config.scatter.disable_reorder,
+                                         0,
+                                         1 };
 
-  uint32_t spec_data_scatter1[ARRAY_LENGTH_MACRO(spec_data_scatter0)];
-  memcpy(spec_data_scatter1, spec_data_scatter0, sizeof(spec_data_scatter0));
+  uint32_t spec_data_scatter0_odd[ARRAY_LENGTH_MACRO(spec_data_scatter0_even)];
+  memcpy(spec_data_scatter0_odd, spec_data_scatter0_even, sizeof(spec_data_scatter0_even));
+  spec_data_scatter0_odd[14] = 0;
 
-  spec_data_scatter1[13] = 1;
+  uint32_t spec_data_scatter1_even[ARRAY_LENGTH_MACRO(spec_data_scatter0_even)];
+  memcpy(spec_data_scatter1_even, spec_data_scatter0_even, sizeof(spec_data_scatter0_even));
+  spec_data_scatter1_even[13] = 1;
 
-  VkSpecializationInfo spec_info_scatter0 = { ARRAY_LENGTH_MACRO(spec_entries),
-                                              spec_entries,
-                                              sizeof(spec_data_scatter0),
-                                              spec_data_scatter0 };
+  uint32_t spec_data_scatter1_odd[ARRAY_LENGTH_MACRO(spec_data_scatter0_even)];
+  memcpy(spec_data_scatter1_odd, spec_data_scatter1_even, sizeof(spec_data_scatter0_even));
+  spec_data_scatter1_odd[14] = 0;
 
-  VkSpecializationInfo spec_info_scatter1 = { ARRAY_LENGTH_MACRO(spec_entries),
-                                              spec_entries,
-                                              sizeof(spec_data_scatter1),
-                                              spec_data_scatter1 };
+  VkSpecializationInfo spec_info[4] = {
+    { ARRAY_LENGTH_MACRO(spec_entries),
+      spec_entries,
+      sizeof(spec_data_scatter0_even),
+      spec_data_scatter0_even },
+    { ARRAY_LENGTH_MACRO(spec_entries),
+      spec_entries,
+      sizeof(spec_data_scatter0_odd),
+      spec_data_scatter0_odd },
+    { ARRAY_LENGTH_MACRO(spec_entries),
+      spec_entries,
+      sizeof(spec_data_scatter1_even),
+      spec_data_scatter1_even },
+    { ARRAY_LENGTH_MACRO(spec_entries),
+      spec_entries,
+      sizeof(spec_data_scatter1_odd),
+      spec_data_scatter1_odd },
+  };
 
   //
   // Create compute pipelines
@@ -505,7 +523,7 @@ radix_sort_vk_create(VkDevice                       device,
                .stage               = VK_SHADER_STAGE_COMPUTE_BIT,                                 \
                .module              = sms[idx_],                                                   \
                .pName               = "main",                                                      \
-               .pSpecializationInfo = idx_ >= 6 ? &spec_info_scatter1 : &spec_info_scatter0 },     \
+               .pSpecializationInfo = &spec_info[idx_ >= 4 ? idx_ - 4 : 0] },                      \
                                                                                                    \
     .layout             = rs->pipeline_layouts.handles[idx_],                                      \
     .basePipelineHandle = VK_NULL_HANDLE,                                                          \

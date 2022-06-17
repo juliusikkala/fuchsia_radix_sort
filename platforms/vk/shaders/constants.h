@@ -15,5 +15,6 @@ layout(constant_id = 10) const uint RS_SCATTER_ENABLE_BROADCAST_MATCH   = 0;
 layout(constant_id = 11) const uint RS_HISTOGRAM_DISABLE_SMEM_HISTOGRAM = 0;
 layout(constant_id = 12) const uint RS_SCATTER_DISABLE_REORDER          = 0;
 layout(constant_id = 13) const uint RS_SCATTER_KEYVAL_DWORD_BASE        = 0;
+layout(constant_id = 14) const uint RS_SCATTER_EVEN                     = 1;
 
 #endif  // SRC_GRAPHICS_LIB_COMPUTE_RADIX_SORT_PLATFORMS_VK_SHADERS_CONSTANTS_H_

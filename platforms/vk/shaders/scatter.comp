@@ -1,6 +1,7 @@
 // Copyright 2021 The Fuchsia Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
+#version 460
 
 // #pragma use_vulkan_memory_model  // results in spirv-remap validation error
 
@@ -8,6 +9,7 @@
 // Each "pass" scatters the keyvals to their new destinations.
 //
 // clang-format off
+#extension GL_GOOGLE_include_directive             : require
 #extension GL_EXT_control_flow_attributes          : require
 #extension GL_KHR_shader_subgroup_basic            : require
 #extension GL_KHR_shader_subgroup_arithmetic       : require
@@ -45,6 +47,17 @@
 #include "constants.h"
 #include "push.h"
 
+#define RS_DEVADDR_KEYVALS_IN(push_)                                                               \
+  (RS_SCATTER_EVEN == 1 ? push_.devaddr_keyvals_even : push_.devaddr_keyvals_odd)
+#define RS_DEVADDR_KEYVALS_OUT(push_)                                                              \
+  (RS_SCATTER_EVEN == 1 ? push_.devaddr_keyvals_odd : push_.devaddr_keyvals_even)
+#define RS_PARTITION_STATUS_INVALID                                                                \
+  (RS_SCATTER_EVEN == 1 ? RS_PARTITION_STATUS_EVEN_INVALID : RS_PARTITION_STATUS_ODD_INVALID)
+#define RS_PARTITION_STATUS_REDUCTION                                                              \
+  (RS_SCATTER_EVEN == 1 ? RS_PARTITION_STATUS_EVEN_REDUCTION : RS_PARTITION_STATUS_ODD_REDUCTION)
+#define RS_PARTITION_STATUS_PREFIX                                                                 \
+  (RS_SCATTER_EVEN == 1 ? RS_PARTITION_STATUS_EVEN_PREFIX : RS_PARTITION_STATUS_ODD_PREFIX)
+
 //
 // Push constants for scatter shader
 //
@@ -72,22 +85,6 @@ layout(push_constant) uniform block_push
 // What's the size of the keyval?
 #ifndef RS_KEYVAL_DWORDS
 #error "Undefined: RS_KEYVAL_DWORDS"
-#endif
-
-//
-// Status masks are defined differently for the scatter_even and
-// scatter_odd shaders.
-//
-#ifndef RS_PARTITION_STATUS_INVALID
-#error "Undefined: RS_PARTITION_STATUS_INVALID"
-#endif
-
-#ifndef RS_PARTITION_STATUS_REDUCTION
-#error "Undefined: RS_PARTITION_STATUS_REDUCTION"
-#endif
-
-#ifndef RS_PARTITION_STATUS_PREFIX
-#error "Undefined: RS_PARTITION_STATUS_PREFIX"
 #endif
 
 //
