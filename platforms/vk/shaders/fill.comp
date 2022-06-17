@@ -14,15 +14,11 @@
 // clang-format on
 
 //
-// Load arch/keyval configuration
-//
-#include "config.h"
-
-//
 // Buffer reference macros and push constants
 //
 #include "bufref.h"
 #include "push.h"
+#include "constants.h"
 
 //
 // Subgroup uniform support
@@ -50,30 +46,17 @@ layout(push_constant) uniform block_push
 RS_STRUCT_INDIRECT_INFO_FILL();
 
 //
-// Check all switches are defined
-//
-#ifndef RS_FILL_WORKGROUP_SIZE_LOG2
-#error "Undefined: RS_FILL_WORKGROUP_SIZE_LOG2"
-#endif
-
-//
-#ifndef RS_FILL_BLOCK_ROWS
-#error "Undefined: RS_FILL_BLOCK_ROWS"
-#endif
-
-//
 // Local macros
 //
 // clang-format off
-#define RS_WORKGROUP_SIZE   (1 << RS_FILL_WORKGROUP_SIZE_LOG2)
-#define RS_BLOCK_DWORDS     (RS_FILL_BLOCK_ROWS * RS_WORKGROUP_SIZE)
+#define RS_BLOCK_DWORDS     (RS_FILL_BLOCK_ROWS * RS_FILL_WORKGROUP_SIZE)
 #define RS_RADIX_MASK       ((1 << RS_RADIX_LOG2) - 1)
 // clang-format on
 
 //
 //
 //
-layout(local_size_x = RS_WORKGROUP_SIZE) in;
+layout(local_size_x_id = 0) in;
 
 //
 //
@@ -131,9 +114,9 @@ main()
 
   [[unroll]] for (uint32_t ii = 0; ii < RS_FILL_BLOCK_ROWS; ii++)
   {
-    if (row_idx + (ii * RS_WORKGROUP_SIZE) < info.dword_offset_max_minus_min)
+    if (row_idx + (ii * RS_FILL_WORKGROUP_SIZE) < info.dword_offset_max_minus_min)
       {
-        rs_dwords.extent[ii * RS_WORKGROUP_SIZE] = push.dword;
+        rs_dwords.extent[ii * RS_FILL_WORKGROUP_SIZE] = push.dword;
       }
   }
 }

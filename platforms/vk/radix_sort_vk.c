@@ -384,6 +384,48 @@ radix_sort_vk_create(VkDevice                       device,
     }
 
   //
+  // Create specialization constants
+  //
+  VkSpecializationMapEntry spec_entries[] = {
+    { 0,  0*sizeof(uint32_t), sizeof(uint32_t)}, // RS_FILL_WORKGROUP_SIZE
+    { 1,  1*sizeof(uint32_t), sizeof(uint32_t)}, // RS_FILL_BLOCK_ROWS
+    { 2,  2*sizeof(uint32_t), sizeof(uint32_t)}, // RS_HISTOGRAM_WORKGROUP_SIZE
+    { 3,  3*sizeof(uint32_t), sizeof(uint32_t)}, // RS_HISTOGRAM_SUBGROUP_SIZE
+    { 4,  4*sizeof(uint32_t), sizeof(uint32_t)}, // RS_HISTOGRAM_BLOCK_ROWS
+    { 5,  5*sizeof(uint32_t), sizeof(uint32_t)}, // RS_PREFIX_WORKGROUP_SIZE
+    { 6,  6*sizeof(uint32_t), sizeof(uint32_t)}, // RS_PREFIX_SUBGROUP_SIZE
+    { 7,  7*sizeof(uint32_t), sizeof(uint32_t)}, // RS_SCATTER_WORKGROUP_SIZE
+    { 8,  8*sizeof(uint32_t), sizeof(uint32_t)}, // RS_SCATTER_SUBGROUP_SIZE
+    { 9,  9*sizeof(uint32_t), sizeof(uint32_t)}, // RS_SCATTER_BLOCK_ROWS
+    {10, 10*sizeof(uint32_t), sizeof(uint32_t)}, // RS_SCATTER_ENABLE_BROADCAST_MATCH
+    {11, 11*sizeof(uint32_t), sizeof(uint32_t)}, // RS_HISTOGRAM_DISABLE_SMEM_HISTOGRAM
+    {12, 12*sizeof(uint32_t), sizeof(uint32_t)}  // RS_SCATTER_DISABLE_REORDER
+  };
+
+  uint32_t spec_data[] = {
+    1 << rs->config.fill.workgroup_size_log2,
+    rs->config.fill.block_rows,
+    1 << rs->config.histogram.workgroup_size_log2,
+    1 << rs->config.histogram.subgroup_size_log2,
+    rs->config.histogram.block_rows,
+    1 << rs->config.prefix.workgroup_size_log2,
+    1 << rs->config.prefix.subgroup_size_log2,
+    1 << rs->config.scatter.workgroup_size_log2,
+    1 << rs->config.scatter.subgroup_size_log2,
+    rs->config.scatter.block_rows,
+    rs->config.scatter.enable_broadcast,
+    rs->config.histogram.disable_smem_histogram,
+    rs->config.scatter.disable_reorder
+  };
+
+  VkSpecializationInfo spec_info = {
+    ARRAY_LENGTH_MACRO(spec_entries),
+    spec_entries,
+    sizeof(spec_data),
+    spec_data
+  };
+
+  //
   // Create compute pipelines
   //
   VkShaderModuleCreateInfo smci = {
@@ -397,10 +439,20 @@ radix_sort_vk_create(VkDevice                       device,
 
   VkShaderModule sms[ARRAY_LENGTH_MACRO(rs->pipelines.handles)];
 
+  struct radix_sort_vk_target_modules modules;
+  if (rs_target_header->config.disable_int64)
+    {
+      modules = rs_target_header->config.keyval_dwords == 1 ? radix_sort_u32_modules_noi64 : radix_sort_u64_modules_noi64;
+    }
+  else
+    {
+      modules = rs_target_header->config.keyval_dwords == 1 ? radix_sort_u32_modules_i64 : radix_sort_u64_modules_i64;
+    }
+
   for (uint32_t ii = 0; ii < pipeline_count; ii++)
     {
-      smci.codeSize = rs_target_header->modules.module_size[ii];
-      smci.pCode    = rs_target_header->modules.module_data[ii];
+      smci.codeSize = modules.module_size[ii];
+      smci.pCode    = modules.module_data[ii];
 
       vk(CreateShaderModule(device, &smci, ac, sms + ii));
     }
@@ -444,7 +496,7 @@ radix_sort_vk_create(VkDevice                       device,
                .stage               = VK_SHADER_STAGE_COMPUTE_BIT,                                 \
                .module              = sms[idx_],                                                   \
                .pName               = "main",                                                      \
-               .pSpecializationInfo = NULL },                                                      \
+               .pSpecializationInfo = &spec_info },                                                \
                                                                                                    \
     .layout             = rs->pipeline_layouts.handles[idx_],                                      \
     .basePipelineHandle = VK_NULL_HANDLE,                                                          \

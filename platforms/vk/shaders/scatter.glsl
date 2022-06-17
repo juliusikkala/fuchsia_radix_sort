@@ -16,17 +16,11 @@
 // clang-format on
 
 //
-// Load arch/keyval configuration
-//
-#include "config.h"
-
-//
 // Optional switches:
 //
 //   #define RS_SCATTER_DISABLE_REORDER
 //   #define RS_SCATTER_ENABLE_BITFIELD_EXTRACT
 //   #define RS_SCATTER_ENABLE_NV_MATCH
-//   #define RS_SCATTER_ENABLE_BROADCAST_MATCH
 //   #define RS_SCATTER_DISABLE_COMPONENTS_IN_REGISTERS
 //
 
@@ -49,6 +43,7 @@
 //
 #include "bufref.h"
 #include "push.h"
+#include "constants.h"
 
 //
 // Push constants for scatter shader
@@ -82,21 +77,6 @@ layout(push_constant) uniform block_push
 // Which keyval dword does this shader bitfieldExtract() bits?
 #ifndef RS_SCATTER_KEYVAL_DWORD_BASE
 #error "Undefined: RS_SCATTER_KEYVAL_DWORD_BASE"
-#endif
-
-//
-#ifndef RS_SCATTER_BLOCK_ROWS
-#error "Undefined: RS_SCATTER_BLOCK_ROWS"
-#endif
-
-//
-#ifndef RS_SCATTER_SUBGROUP_SIZE_LOG2
-#error "Undefined: RS_SCATTER_SUBGROUP_SIZE_LOG2"
-#endif
-
-//
-#ifndef RS_SCATTER_WORKGROUP_SIZE_LOG2
-#error "Undefined: RS_SCATTER_WORKGROUP_SIZE_LOG2"
 #endif
 
 //
@@ -140,8 +120,8 @@ layout(push_constant) uniform block_push
 //
 // clang-format off
 #define RS_KEYVAL_SIZE               (RS_KEYVAL_DWORDS * 4)
-#define RS_WORKGROUP_SIZE            (1 << RS_SCATTER_WORKGROUP_SIZE_LOG2)
-#define RS_SUBGROUP_SIZE             (1 << RS_SCATTER_SUBGROUP_SIZE_LOG2)
+#define RS_WORKGROUP_SIZE            (RS_SCATTER_WORKGROUP_SIZE)
+#define RS_SUBGROUP_SIZE             (RS_SCATTER_SUBGROUP_SIZE)
 #define RS_WORKGROUP_SUBGROUPS       (RS_WORKGROUP_SIZE / RS_SUBGROUP_SIZE)
 #define RS_SUBGROUP_KEYVALS          (RS_SCATTER_BLOCK_ROWS * RS_SUBGROUP_SIZE)
 #define RS_BLOCK_KEYVALS             (RS_SCATTER_BLOCK_ROWS * RS_WORKGROUP_SIZE)
@@ -169,21 +149,13 @@ layout(push_constant) uniform block_push
 //
 // Set up match mask
 //
-#if (RS_SUBGROUP_SIZE <= 32)
-#if (RS_SUBGROUP_SIZE == 32)
-#define RS_SUBGROUP_MASK 0xFFFFFFFF
-#else
-#define RS_SUBGROUP_MASK ((1 << RS_SUBGROUP_SIZE) - 1)
-#endif
-#endif
+#define RS_SUBGROUP_MASK (RS_SUBGROUP_SIZE == 32 ? 0xFFFFFFFF : ((1 << RS_SUBGROUP_SIZE) - 1))
 
 //
 // Determine at compile time the base of the final iteration for
 // workgroups smaller than RS_RADIX_SIZE.
 //
-#if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
 #define RS_WORKGROUP_BASE_FINAL ((RS_RADIX_SIZE / RS_WORKGROUP_SIZE) * RS_WORKGROUP_SIZE)
-#endif
 
 //
 // Max macro
@@ -291,7 +263,7 @@ layout(push_constant) uniform block_push
 //
 //
 //
-layout(local_size_x = RS_WORKGROUP_SIZE) in;
+layout(local_size_x_id = 7) in;
 
 //
 //
@@ -325,46 +297,28 @@ shared rs_scatter_smem smem;
 // The shared memory barrier is either subgroup-wide or
 // workgroup-wide.
 //
-#if (RS_WORKGROUP_SUBGROUPS == 1)
-#define RS_BARRIER() subgroupBarrier()
-#else
-#define RS_BARRIER() barrier()
-#endif
+#define RS_BARRIER() if(RS_WORKGROUP_SUBGROUPS == 1) { subgroupBarrier(); } else { barrier(); }
 
 //
 // If multi-subgroup then define shared memory
 //
-#if (RS_WORKGROUP_SUBGROUPS > 1)
-
 //----------------------------------------
 #define RS_PREFIX_SWEEP0(idx_) smem.extent[RS_SMEM_PREFIX_OFFSET + RS_SWEEP_0_OFFSET + (idx_)]
 //----------------------------------------
 
-#if (RS_SWEEP_1_SIZE > 0)
 //----------------------------------------
 #define RS_PREFIX_SWEEP1(idx_) smem.extent[RS_SMEM_PREFIX_OFFSET + RS_SWEEP_1_OFFSET + (idx_)]
 //----------------------------------------
-#endif
-
-#if (RS_SWEEP_2_SIZE > 0)
 //----------------------------------------
 #define RS_PREFIX_SWEEP2(idx_) smem.extent[RS_SMEM_PREFIX_OFFSET + RS_SWEEP_2_OFFSET + (idx_)]
 //----------------------------------------
-#endif
-
-#endif
 
 //
 // Define prefix load/store functions
 //
 // clang-format off
-#if (RS_WORKGROUP_SUBGROUPS == 1)
-#define RS_PREFIX_LOAD(idx_)   smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID + (idx_)]
-#define RS_PREFIX_STORE(idx_)  smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID + (idx_)]
-#else
-#define RS_PREFIX_LOAD(idx_)   smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x + (idx_)]
-#define RS_PREFIX_STORE(idx_)  smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x + (idx_)]
-#endif
+#define RS_PREFIX_LOAD(idx_)   smem.extent[RS_SMEM_HISTOGRAM_OFFSET + (RS_WORKGROUP_SUBGROUPS == 1 ? gl_SubgroupInvocationID : gl_LocalInvocationID.x) + (idx_)]
+#define RS_PREFIX_STORE(idx_)  smem.extent[RS_SMEM_HISTOGRAM_OFFSET + (RS_WORKGROUP_SUBGROUPS == 1 ? gl_SubgroupInvocationID : gl_LocalInvocationID.x) + (idx_)]
 // clang-format on
 
 //
@@ -383,16 +337,17 @@ shared rs_scatter_smem smem;
 void
 rs_histogram_zero()
 {
-#if (RS_WORKGROUP_SUBGROUPS == 1)
-
+if (RS_WORKGROUP_SUBGROUPS == 1)
+{
   const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_SubgroupInvocationID;
 
   [[unroll]] for (uint32_t ii = 0; ii < RS_RADIX_SIZE; ii += RS_SUBGROUP_SIZE)
   {
     smem.extent[smem_offset + ii] = 0;
   }
-
-#elif (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+}
+else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+{
 
   const uint32_t smem_offset = RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x;
 
@@ -401,25 +356,35 @@ rs_histogram_zero()
     smem.extent[smem_offset + ii] = 0;
   }
 
-#if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+{
   const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
 
   if (smem_offset_final < RS_RADIX_SIZE)
     {
-      smem.histogram[smem_offset_final] = 0;
+      smem.extent[smem_offset_final] = 0;
     }
-#endif
+}
 
-#elif (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+}
+else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+{
 
-#if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+{
   if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
-#endif
     {
       smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x] = 0;
     }
+}
+else
+{
+    {
+      smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x] = 0;
+    }
+}
 
-#endif
+}
 
   RS_BARRIER();
 }
@@ -442,52 +407,17 @@ rs_histogram_rank(const RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS],
 
   //----------------------------------------------------------------------
   //
-  // Use the Volta/Turing `match.sync` instruction.
-  //
-  // Note that performance is quite poor and the break-even for
-  // `match.sync` requires more bits.
-  //
-  //----------------------------------------------------------------------
-#ifdef RS_SCATTER_ENABLE_NV_MATCH
-
-  //
-  // 32
-  //
-#if (RS_SUBGROUP_SIZE == 32)
-
-  [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
-  {
-    //
-    // NOTE(allanmac): Unfortunately there is no `match.any.sync.b8`
-    //
-    // TODO(allanmac): Consider using the `atomicOr()` match approach
-    // described by Adinets since Volta/Turing have extremely fast
-    // atomic smem operations.
-    //
-    const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
-    const uint32_t match = subgroupPartitionNV(digit).x;
-
-    kr[ii] = (bitCount(match) << 16) | bitCount(match & gl_SubgroupLeMask.x);
-  }
-
-  //
-  // Undefined!
-  //
-#else
-#error "Error: rs_histogram_rank() undefined for subgroup size"
-#endif
-
-  //----------------------------------------------------------------------
-  //
   // Default is to emulate a `match` operation with ballots.
   //
   //----------------------------------------------------------------------
-#elif !defined(RS_SCATTER_ENABLE_BROADCAST_MATCH)
+if (RS_SCATTER_ENABLE_BROADCAST_MATCH == 0)
+{
 
   //
   // 64
   //
-#if (RS_SUBGROUP_SIZE == 64)
+if (RS_SUBGROUP_SIZE == 64)
+{
 
   [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
   {
@@ -522,8 +452,9 @@ rs_histogram_rank(const RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS],
   //
   // <= 32
   //
-#elif ((RS_SUBGROUP_SIZE <= 32) && !defined(RS_SCATTER_ENABLE_NV_MATCH))
-
+}
+else if (RS_SUBGROUP_SIZE <= 32)
+{
   [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
   {
     const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
@@ -549,13 +480,8 @@ rs_histogram_rank(const RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS],
 
     kr[ii] = (bitCount(match) << 16) | bitCount(match & gl_SubgroupLeMask.x);
   }
-
-  //
-  // Undefined!
-  //
-#else
-#error "Error: rs_histogram_rank() undefined for subgroup size"
-#endif
+}
+}
 
   //----------------------------------------------------------------------
   //
@@ -564,13 +490,14 @@ rs_histogram_rank(const RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS],
   // In general, using broadcasts is a win for narrow subgroups.
   //
   //----------------------------------------------------------------------
-#else
+else
+{
 
   //
   // 64
   //
-#if (RS_SUBGROUP_SIZE == 64)
-
+if (RS_SUBGROUP_SIZE == 64)
+{
   [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
   {
     const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
@@ -607,8 +534,9 @@ rs_histogram_rank(const RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS],
   //
   // <= 32
   //
-#elif ((RS_SUBGROUP_SIZE <= 32) && !defined(RS_SCATTER_ENABLE_NV_MATCH))
-
+}
+else if (RS_SUBGROUP_SIZE <= 32)
+{
   [[unroll]] for (uint32_t ii = 0; ii < RS_SCATTER_BLOCK_ROWS; ii++)
   {
     const uint32_t digit = RS_KV_EXTRACT_DIGIT(kv[ii]);
@@ -624,15 +552,8 @@ rs_histogram_rank(const RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS],
 
     kr[ii] = (bitCount(match) << 16) | bitCount(match & gl_SubgroupLeMask.x);
   }
-
-  //
-  // Undefined!
-  //
-#else
-#error "Error: rs_histogram_rank() undefined for subgroup size"
-#endif
-
-#endif
+}
+}
 
   //
   // This is a little unconventional but cycling through a subgroup at
@@ -677,18 +598,16 @@ rs_first_prefix_store(restrict buffer_rs_partitions rs_partitions)
   //
   // Define the histogram reference
   //
-#if (RS_WORKGROUP_SUBGROUPS == 1)
-  const uint32_t hist_offset = gl_SubgroupInvocationID * 4;
-#else
-  const uint32_t hist_offset = gl_LocalInvocationID.x * 4;
-#endif
+  const uint32_t hist_offset = (RS_WORKGROUP_SUBGROUPS == 1) ?
+    gl_SubgroupInvocationID * 4 : gl_LocalInvocationID.x * 4;
 
   readonly RS_BUFREF_DEFINE_AT_OFFSET_UINT32(buffer_rs_histogram,
                                              rs_histogram,
                                              push.devaddr_histograms,
                                              hist_offset);
 
-#if (RS_WORKGROUP_SUBGROUPS == 1)
+if (RS_WORKGROUP_SUBGROUPS == 1)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SUBGROUPS == 1)
@@ -711,8 +630,9 @@ rs_first_prefix_store(restrict buffer_rs_partitions rs_partitions)
                 gl_StorageSemanticsBuffer,
                 gl_SemanticsRelease);
   }
-
-#elif (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+}
+else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
@@ -736,11 +656,12 @@ rs_first_prefix_store(restrict buffer_rs_partitions rs_partitions)
                 gl_SemanticsRelease);
   }
 
-#if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+{
   const uint32_t smem_offset_final_h = smem_offset_h + RS_WORKGROUP_BASE_FINAL;
   const uint32_t smem_offset_final_l = smem_offset_l + RS_WORKGROUP_BASE_FINAL;
 
-  if (smem_offset_final < RS_RADIX_SIZE)
+  if (smem_offset_final_h < RS_RADIX_SIZE && smem_offset_final_l < RS_RADIX_SIZE)
     {
       const uint32_t exc = rs_histogram.extent[RS_WORKGROUP_BASE_FINAL];
       const uint32_t red = smem.extent[smem_offset_final_h];
@@ -755,16 +676,17 @@ rs_first_prefix_store(restrict buffer_rs_partitions rs_partitions)
                   gl_StorageSemanticsBuffer,
                   gl_SemanticsRelease);
     }
-#endif
-
-#elif (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+}
+}
+else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
   //
-#if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+{
   if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
-#endif
     {
       const uint32_t exc = rs_histogram.extent[0];
       const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
@@ -779,8 +701,24 @@ rs_first_prefix_store(restrict buffer_rs_partitions rs_partitions)
                   gl_StorageSemanticsBuffer,
                   gl_SemanticsRelease);
     }
+}
+else
+    {
+      const uint32_t exc = rs_histogram.extent[0];
+      const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
 
-#endif
+      smem.extent[RS_SMEM_LOOKBACK_OFFSET + gl_LocalInvocationID.x] = exc;
+
+      const uint32_t inc = exc + red;
+
+      atomicStore(rs_partitions.extent[0],
+                  inc | RS_PARTITION_MASK_PREFIX,
+                  gl_ScopeQueueFamily,
+                  gl_StorageSemanticsBuffer,
+                  gl_SemanticsRelease);
+    }
+}
+
 }
 
 //
@@ -790,7 +728,8 @@ void
 rs_reduction_store(restrict buffer_rs_partitions      rs_partitions,
                    RS_SUBGROUP_UNIFORM const uint32_t partition_base)
 {
-#if (RS_WORKGROUP_SUBGROUPS == 1)
+if (RS_WORKGROUP_SUBGROUPS == 1)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SUBGROUPS == 1)
@@ -807,8 +746,9 @@ rs_reduction_store(restrict buffer_rs_partitions      rs_partitions,
                 gl_StorageSemanticsBuffer,
                 gl_SemanticsRelease);
   }
-
-#elif (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+}
+else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
@@ -826,7 +766,8 @@ rs_reduction_store(restrict buffer_rs_partitions      rs_partitions,
                 gl_SemanticsRelease);
   }
 
-#if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+{
   const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
 
   if (smem_offset_final < RS_RADIX_SIZE)
@@ -839,16 +780,17 @@ rs_reduction_store(restrict buffer_rs_partitions      rs_partitions,
                   gl_StorageSemanticsBuffer,
                   gl_SemanticsRelease);
     }
-#endif
-
-#elif (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+}
+}
+else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
   //
-#if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
+{
   if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
-#endif
     {
       const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
 
@@ -858,8 +800,18 @@ rs_reduction_store(restrict buffer_rs_partitions      rs_partitions,
                   gl_StorageSemanticsBuffer,
                   gl_SemanticsRelease);
     }
+}
+else
+{
+    const uint32_t red = smem.extent[RS_SMEM_HISTOGRAM_OFFSET + gl_LocalInvocationID.x];
 
-#endif
+    atomicStore(rs_partitions.extent[partition_base],
+                red | RS_PARTITION_MASK_REDUCTION,
+                gl_ScopeQueueFamily,
+                gl_StorageSemanticsBuffer,
+                gl_SemanticsRelease);
+}
+}
 }
 
 //
@@ -875,7 +827,8 @@ void
 rs_lookback_store(restrict buffer_rs_partitions      rs_partitions,
                   RS_SUBGROUP_UNIFORM const uint32_t partition_base)
 {
-#if (RS_WORKGROUP_SUBGROUPS == 1)
+if (RS_WORKGROUP_SUBGROUPS == 1)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SUBGROUPS == 1)
@@ -929,8 +882,9 @@ rs_lookback_store(restrict buffer_rs_partitions      rs_partitions,
         break;
       }
   }
-
-#elif (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+}
+else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
@@ -985,7 +939,8 @@ rs_lookback_store(restrict buffer_rs_partitions      rs_partitions,
       }
   }
 
-#if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+{
   const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
 
   if (smem_offset_final < RS_SMEM_LOOKBACK_OFFSET + RS_RADIX_SIZE)
@@ -999,7 +954,7 @@ rs_lookback_store(restrict buffer_rs_partitions      rs_partitions,
       //
       while (true)
         {
-          const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev + ii],
+          const uint32_t prev = atomicLoad(rs_partitions.extent[partition_base_prev],
                                            gl_ScopeQueueFamily,
                                            gl_StorageSemanticsBuffer,
                                            gl_SemanticsAcquire);
@@ -1025,7 +980,7 @@ rs_lookback_store(restrict buffer_rs_partitions      rs_partitions,
           //
           //   reduction + 1 = prefix
           //
-          smem.extent[smem_offset + ii] = exc;
+          smem.extent[smem_offset] = exc;
 
           atomicAdd(rs_partitions.extent[partition_base + RS_WORKGROUP_BASE_FINAL],
                     exc | (1 << 30),
@@ -1035,16 +990,15 @@ rs_lookback_store(restrict buffer_rs_partitions      rs_partitions,
           break;
         }
     }
-#endif
-
-#elif (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+}
+}
+else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
   //
-#if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
-  if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
-#endif
+  if (RS_WORKGROUP_SIZE == RS_RADIX_SIZE || gl_LocalInvocationID.x < RS_RADIX_SIZE)
     {
       uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
       uint32_t exc                 = 0;
@@ -1091,8 +1045,7 @@ rs_lookback_store(restrict buffer_rs_partitions      rs_partitions,
           break;
         }
     }
-
-#endif
+}
 }
 
 //
@@ -1105,7 +1058,8 @@ void
 rs_lookback_skip_store(restrict buffer_rs_partitions      rs_partitions,
                        RS_SUBGROUP_UNIFORM const uint32_t partition_base)
 {
-#if (RS_WORKGROUP_SUBGROUPS == 1)
+if (RS_WORKGROUP_SUBGROUPS == 1)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SUBGROUPS == 1)
@@ -1148,8 +1102,9 @@ rs_lookback_skip_store(restrict buffer_rs_partitions      rs_partitions,
         break;
       }
   }
-
-#elif (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+}
+else if (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SIZE < RS_RADIX_SIZE)
@@ -1193,7 +1148,8 @@ rs_lookback_skip_store(restrict buffer_rs_partitions      rs_partitions,
       }
   }
 
-#if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+if (RS_WORKGROUP_BASE_FINAL < RS_RADIX_SIZE)
+{
   const uint32_t smem_offset_final = smem_offset + RS_WORKGROUP_BASE_FINAL;
 
   if (smem_offset_final < RS_RADIX_SIZE)
@@ -1233,16 +1189,15 @@ rs_lookback_skip_store(restrict buffer_rs_partitions      rs_partitions,
           break;
         }
     }
-#endif
-
-#elif (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+}
+}
+else if (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
+{
   ////////////////////////////////////////////////////////////////////////////
   //
   // (RS_WORKGROUP_SIZE >= RS_RADIX_SIZE)
   //
-#if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
-  if (gl_LocalInvocationID.x < RS_RADIX_SIZE)
-#endif
+  if (RS_WORKGROUP_SIZE == RS_RADIX_SIZE || gl_LocalInvocationID.x < RS_RADIX_SIZE)
     {
       uint32_t partition_base_prev = partition_base - RS_RADIX_SIZE;
       uint32_t exc                 = 0;
@@ -1278,8 +1233,7 @@ rs_lookback_skip_store(restrict buffer_rs_partitions      rs_partitions,
           break;
         }
     }
-
-#endif
+}
 }
 
 //
@@ -1334,11 +1288,10 @@ void
 rs_reorder(inout RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS], inout uint32_t kr[RS_SCATTER_BLOCK_ROWS])
 {
   // clang-format off
-#if (RS_WORKGROUP_SUBGROUPS == 1)
-  const uint32_t smem_base = RS_SMEM_REORDER_OFFSET + gl_SubgroupInvocationID;
-#else
-  const uint32_t smem_base = RS_SMEM_REORDER_OFFSET + gl_LocalInvocationID.x;
-#endif
+  const uint32_t smem_base =
+    RS_WORKGROUP_SUBGROUPS == 1 ?
+      RS_SMEM_REORDER_OFFSET + gl_SubgroupInvocationID :
+      RS_SMEM_REORDER_OFFSET + gl_LocalInvocationID.x;
   // clang-format on
 
   [[unroll]] for (uint32_t ii = 0; ii < RS_KEYVAL_DWORDS; ii++)
@@ -1396,11 +1349,10 @@ rs_reorder_1(inout RS_KEYVAL_TYPE kv[RS_SCATTER_BLOCK_ROWS],
              inout uint32_t       kr[RS_SCATTER_BLOCK_ROWS])
 {
   // clang-format off
-#if (RS_WORKGROUP_SUBGROUPS == 1)
-  const uint32_t smem_base = RS_SMEM_REORDER_OFFSET + gl_SubgroupInvocationID;
-#else
-  const uint32_t smem_base = RS_SMEM_REORDER_OFFSET + gl_LocalInvocationID.x;
-#endif
+  const uint32_t smem_base =
+    RS_WORKGROUP_SUBGROUPS == 1 ?
+      RS_SMEM_REORDER_OFFSET + gl_SubgroupInvocationID :
+      RS_SMEM_REORDER_OFFSET + gl_LocalInvocationID.x;
   // clang-format on
 
   [[unroll]] for (uint32_t ii = 0; ii < RS_KEYVAL_DWORDS; ii++)
@@ -1583,9 +1535,10 @@ main()
     {
       rs_rank_to_global(kv, kr);
 
-#ifndef RS_SCATTER_DISABLE_REORDER
-      rs_reorder_1(kv, kr);
-#endif
+      if(RS_SCATTER_DISABLE_REORDER == 0)
+      {
+        rs_reorder_1(kv, kr);
+      }
 
       rs_store(kv, kr);
     }
@@ -1594,11 +1547,8 @@ main()
       //
       // Define partitions bufref
       //
-#if (RS_WORKGROUP_SUBGROUPS == 1)
-      const uint32_t partition_offset = gl_SubgroupInvocationID * 4;
-#else
-      const uint32_t partition_offset = gl_LocalInvocationID.x * 4;
-#endif
+      const uint32_t partition_offset =
+        RS_WORKGROUP_SUBGROUPS == 1 ? gl_SubgroupInvocationID * 4 : gl_LocalInvocationID.x * 4;
 
       RS_BUFREF_DEFINE_AT_OFFSET_UINT32(buffer_rs_partitions,
                                         rs_partitions,
@@ -1656,7 +1606,8 @@ main()
             }
         }
 
-#ifndef RS_SCATTER_DISABLE_REORDER
+if(RS_SCATTER_DISABLE_REORDER == 0)
+{
       //
       // Compute exclusive prefix scan of histogram.
       //
@@ -1682,12 +1633,14 @@ main()
       // Ends with a barrier.
       //
       rs_reorder(kv, kr);
-#else
+}
+else
+{
       //
       // Wait for lookback to complete.
       //
       RS_BARRIER();
-#endif
+}
 
       //
       // Convert local index to a global index.

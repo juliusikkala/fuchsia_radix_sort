@@ -6,12 +6,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Vulkan REQUIRED)
 
-function(shader header source source_list include_path)
-    get_filename_component(shader_bin_name ${source} NAME)
+function(shader header source source_list)
+    get_filename_component(shader_bin_name ${header} NAME_WLE)
     string(REPLACE "\." "_" shader_bin_name ${shader_bin_name})
     add_custom_command(
         OUTPUT ${header}
-        COMMAND glslangValidator --target-env vulkan1.2 --vn ${shader_bin_name}_shader_binary ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${header} -I${include_path} -Os
+        COMMAND glslangValidator --target-env vulkan1.2 --vn ${shader_bin_name}_shader_binary ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${header} -Os ${ARGN}
         MAIN_DEPENDENCY ${source}
         DEPENDS ${source}
         IMPLICIT_DEPENDS C ${source}
@@ -19,6 +19,30 @@ function(shader header source source_list include_path)
     )
     set(${source_list} ${${source_list}} ${header} PARENT_SCOPE)
 endfunction()
+
+foreach(support IN ITEMS noi64 i64)
+    foreach(keyval IN ITEMS u32 u64)
+        set(a ${support}_${keyval}_)
+        set(d )
+        if(${support} STREQUAL noi64)
+          set(d ${d} -DRS_DISABLE_SHADER_INT64)
+        endif()
+        if(${keyval} STREQUAL u32)
+          set(d ${d} -DRS_KEYVAL_DWORDS=1)
+        else()
+          set(d ${d} -DRS_KEYVAL_DWORDS=2)
+        endif()
+        message("add shader " ${d})
+        shader(${a}init.comp.h platforms/vk/shaders/init.comp shader_binary ${d})
+        shader(${a}fill.comp.h platforms/vk/shaders/fill.comp shader_binary ${d})
+        shader(${a}histogram.comp.h platforms/vk/shaders/histogram.comp shader_binary ${d})
+        shader(${a}prefix.comp.h platforms/vk/shaders/prefix.comp shader_binary ${d})
+        shader(${a}scatter_0_even.comp.h platforms/vk/shaders/scatter_0_even.comp shader_binary ${d})
+        shader(${a}scatter_0_odd.comp.h platforms/vk/shaders/scatter_0_odd.comp shader_binary ${d})
+        shader(${a}scatter_1_even.comp.h platforms/vk/shaders/scatter_1_even.comp shader_binary ${d})
+        shader(${a}scatter_1_odd.comp.h platforms/vk/shaders/scatter_1_odd.comp shader_binary ${d})
+    endforeach()
+endforeach()
 
 set(targets
     amd/gcn3
@@ -29,20 +53,8 @@ set(targets
 )
 
 foreach(target ${targets})
-    foreach(keyval IN ITEMS u32 u64)
-        get_filename_component(arch ${target} NAME)
-        set(a ${arch}_${keyval}_)
-        set(i "${CMAKE_CURRENT_SOURCE_DIR}/platforms/vk/targets/vendors/${target}/${keyval}")
-        shader(${a}init.comp.h platforms/vk/shaders/init.comp shader_binary ${i})
-        shader(${a}fill.comp.h platforms/vk/shaders/fill.comp shader_binary ${i})
-        shader(${a}histogram.comp.h platforms/vk/shaders/histogram.comp shader_binary ${i})
-        shader(${a}prefix.comp.h platforms/vk/shaders/prefix.comp shader_binary ${i})
-        shader(${a}scatter_0_even.comp.h platforms/vk/shaders/scatter_0_even.comp shader_binary ${i})
-        shader(${a}scatter_0_odd.comp.h platforms/vk/shaders/scatter_0_odd.comp shader_binary ${i})
-        shader(${a}scatter_1_even.comp.h platforms/vk/shaders/scatter_1_even.comp shader_binary ${i})
-        shader(${a}scatter_1_odd.comp.h platforms/vk/shaders/scatter_1_odd.comp shader_binary ${i})
-        set(target_sources ${target_sources} ${i}/header.c)
-    endforeach()
+    set(target_sources ${target_sources} "${CMAKE_CURRENT_SOURCE_DIR}/platforms/vk/targets/vendors/${target}/u32/header.c")
+    set(target_sources ${target_sources} "${CMAKE_CURRENT_SOURCE_DIR}/platforms/vk/targets/vendors/${target}/u64/header.c")
 endforeach()
 
 add_library(vk-radix-sort STATIC

@@ -16,15 +16,11 @@
 // clang-format on
 
 //
-//
-//
-#include "config.h"
-
-//
 // Buffer reference macros and push constants
 //
 #include "bufref.h"
 #include "push.h"
+#include "constants.h"
 
 //
 //
@@ -47,40 +43,19 @@ layout(push_constant) uniform block_push
 #endif
 
 //
-// Check all switches are defined
-//
-//
-#ifndef RS_PREFIX_SUBGROUP_SIZE_LOG2
-#error "Undefined: RS_PREFIX_SUBGROUP_SIZE_LOG2"
-#endif
-
-//
-#ifndef RS_PREFIX_WORKGROUP_SIZE_LOG2
-#error "Undefined: RS_PREFIX_WORKGROUP_SIZE_LOG2"
-#endif
-
-//
 // Local macros
 //
 // clang-format off
 #define RS_KEYVAL_SIZE          (RS_KEYVAL_DWORDS * 4)
-#define RS_WORKGROUP_SIZE       (1 << RS_PREFIX_WORKGROUP_SIZE_LOG2)
-#define RS_SUBGROUP_SIZE        (1 << RS_PREFIX_SUBGROUP_SIZE_LOG2)
+#define RS_WORKGROUP_SIZE       (RS_PREFIX_WORKGROUP_SIZE)
+#define RS_SUBGROUP_SIZE        (RS_PREFIX_SUBGROUP_SIZE)
 #define RS_WORKGROUP_SUBGROUPS  (RS_WORKGROUP_SIZE / RS_SUBGROUP_SIZE)
 // clang-format on
 
 //
-// There is no purpose in having a workgroup size larger than the
-// radix size.
-//
-#if (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)
-#error "Error: (RS_WORKGROUP_SIZE > RS_RADIX_SIZE)"
-#endif
-
 //
 //
-//
-layout(local_size_x = RS_WORKGROUP_SIZE) in;
+layout(local_size_x_id = 5) in;
 
 //
 // Histogram buffer reference
@@ -98,31 +73,21 @@ layout(buffer_reference, std430) buffer buffer_rs_histograms
 //
 // If multi-subgroup then define shared memory
 //
-#if (RS_WORKGROUP_SUBGROUPS > 1)
-
 //----------------------------------------
-shared uint32_t smem_sweep0[RS_SWEEP_0_SIZE];
+shared uint32_t smem_sweep0[RS_SWEEP_0_SIZE + (RS_SWEEP_0_SIZE == 0 ? 1 : 0)];
 
 #define RS_PREFIX_SWEEP0(idx_) smem_sweep0[idx_]
 //----------------------------------------
-
-#if (RS_SWEEP_1_SIZE > 0)
 //----------------------------------------
-shared uint32_t smem_sweep1[RS_SWEEP_1_SIZE];
+shared uint32_t smem_sweep1[RS_SWEEP_1_SIZE + (RS_SWEEP_1_SIZE == 0 ? 1 : 0)];
 
 #define RS_PREFIX_SWEEP1(idx_) smem_sweep1[idx_]
 //----------------------------------------
-#endif
-
-#if (RS_SWEEP_2_SIZE > 0)
 //----------------------------------------
-shared uint32_t smem_sweep2[RS_SWEEP_2_SIZE];
+shared uint32_t smem_sweep2[RS_SWEEP_2_SIZE + (RS_SWEEP_2_SIZE == 0 ? 1 : 0)];
 
 #define RS_PREFIX_SWEEP2(idx_) smem_sweep2[idx_]
 //----------------------------------------
-#endif
-
-#endif
 
 //
 // Define function arguments
@@ -151,7 +116,8 @@ main()
   //
   // Define buffer reference to read histograms
   //
-#if (RS_WORKGROUP_SUBGROUPS == 1)
+if (RS_WORKGROUP_SUBGROUPS == 1)
+{
   //
   // Define histograms bufref for single subgroup
   //
@@ -168,7 +134,13 @@ main()
                                     push.devaddr_histograms,
                                     histograms_offset);
 
-#else
+  //
+  // Compute exclusive prefix of uint32_t[256]
+  //
+  rs_prefix(rs_histograms);
+}
+else
+{
   //
   // Define histograms bufref for workgroup
   //
@@ -180,13 +152,12 @@ main()
                                     rs_histograms,
                                     push.devaddr_histograms,
                                     histograms_offset);
-
-#endif
-
   //
   // Compute exclusive prefix of uint32_t[256]
   //
   rs_prefix(rs_histograms);
+}
+
 }
 
 //

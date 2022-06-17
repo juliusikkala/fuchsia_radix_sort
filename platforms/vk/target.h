@@ -26,6 +26,7 @@
 struct radix_sort_vk_target_config
 {
   uint32_t keyval_dwords;
+  uint32_t disable_int64;
 
   struct
   {
@@ -35,6 +36,7 @@ struct radix_sort_vk_target_config
   struct
   {
     uint32_t workgroup_size_log2;
+    uint32_t block_rows;
   } fill;
 
   struct
@@ -42,6 +44,7 @@ struct radix_sort_vk_target_config
     uint32_t workgroup_size_log2;
     uint32_t subgroup_size_log2;
     uint32_t block_rows;
+    uint32_t disable_smem_histogram;
   } histogram;
 
   struct
@@ -55,6 +58,8 @@ struct radix_sort_vk_target_config
     uint32_t workgroup_size_log2;
     uint32_t subgroup_size_log2;
     uint32_t block_rows;
+    uint32_t enable_broadcast;
+    uint32_t disable_reorder;
   } scatter;
 };
 
@@ -79,8 +84,12 @@ struct radix_sort_vk_target
   union radix_sort_vk_target_extensions extensions;  // target device extensions
   union radix_sort_vk_target_features   features;    // target device features
   struct radix_sort_vk_target_config    config;      // target configuration
-  struct radix_sort_vk_target_modules   modules;     // SPIR-V modules
 };
+
+extern const struct radix_sort_vk_target_modules radix_sort_u32_modules_i64;
+extern const struct radix_sort_vk_target_modules radix_sort_u64_modules_i64;
+extern const struct radix_sort_vk_target_modules radix_sort_u32_modules_noi64;
+extern const struct radix_sort_vk_target_modules radix_sort_u64_modules_noi64;
 
 //
 //

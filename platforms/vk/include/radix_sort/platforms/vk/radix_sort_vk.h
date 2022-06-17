@@ -68,8 +68,10 @@ extern "C" {
 //
 typedef struct radix_sort_vk_target radix_sort_vk_target_t;
 
-radix_sort_vk_target_t const *
-radix_sort_vk_target_auto_detect(VkPhysicalDeviceProperties const * props, uint32_t keyval_dwords);
+radix_sort_vk_target_t
+radix_sort_vk_target_auto_detect(VkPhysicalDeviceProperties const * props,
+                                 VkPhysicalDeviceSubgroupProperties const * subgroup_props,
+                                 uint32_t keyval_dwords);
 
 typedef struct radix_sort_vk_target_requirements
 {

@@ -14,15 +14,11 @@
 // clang-format on
 
 //
-// Load arch/keyval configuration
-//
-#include "config.h"
-
-//
 // Buffer reference macros and push constants
 //
 #include "bufref.h"
 #include "push.h"
+#include "constants.h"
 
 //
 // Subgroup uniform support
@@ -53,10 +49,6 @@ RS_STRUCT_INDIRECT_INFO();
 // Local macros
 //
 // clang-format off
-#define RS_FILL_WORKGROUP_SIZE        (1 << RS_FILL_WORKGROUP_SIZE_LOG2)
-#define RS_SCATTER_WORKGROUP_SIZE     (1 << RS_SCATTER_WORKGROUP_SIZE_LOG2)
-#define RS_HISTOGRAM_WORKGROUP_SIZE   (1 << RS_HISTOGRAM_WORKGROUP_SIZE_LOG2)
-
 #define RS_FILL_BLOCK_DWORDS          (RS_FILL_BLOCK_ROWS * RS_FILL_WORKGROUP_SIZE)
 #define RS_SCATTER_BLOCK_KEYVALS      (RS_SCATTER_BLOCK_ROWS * RS_SCATTER_WORKGROUP_SIZE)
 #define RS_HISTOGRAM_BLOCK_KEYVALS    (RS_HISTOGRAM_BLOCK_ROWS * RS_HISTOGRAM_WORKGROUP_SIZE)

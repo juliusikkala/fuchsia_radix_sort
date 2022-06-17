@@ -50,7 +50,8 @@
 void
 rs_prefix(RS_PREFIX_ARGS)
 {
-#if (RS_WORKGROUP_SUBGROUPS == 1)
+if (RS_WORKGROUP_SUBGROUPS == 1)
+{
   //
   // Workgroup is a single subgroup so no shared memory is required.
   //
@@ -78,8 +79,9 @@ rs_prefix(RS_PREFIX_ARGS)
 
       RS_PREFIX_STORE(ii) = h_inc - h;  // exclusive
     }
-
-#else
+}
+else
+{
   //
   // Workgroup is multiple subgroups and uses shared memory to store
   // the scan's intermediate results.
@@ -132,25 +134,39 @@ rs_prefix(RS_PREFIX_ARGS)
   // Skip generalizing these sweeps for all possible subgroups -- just
   // write them directly.
   //
-#if ((RS_SUBGROUP_SIZE == 64) || (RS_SUBGROUP_SIZE == 32) || (RS_SUBGROUP_SIZE == 16))
+if ((RS_SUBGROUP_SIZE == 64) || (RS_SUBGROUP_SIZE == 32) || (RS_SUBGROUP_SIZE == 16))
+{
 
   //////////////////////////////////////////////////////////////////////
   //
   // Scan 0
   //
-#if (RS_SWEEP_0_SIZE != RS_SUBGROUP_SIZE)
+if (RS_SWEEP_0_SIZE != RS_SUBGROUP_SIZE)
+{
   if (gl_LocalInvocationID.x < RS_SWEEP_0_SIZE)  // subgroup has inactive invocations
-#endif
     {
       const uint32_t h0_red = RS_PREFIX_SWEEP0(gl_LocalInvocationID.x);
       const uint32_t h0_inc = subgroupInclusiveAdd(h0_red);
 
       RS_PREFIX_SWEEP0(gl_LocalInvocationID.x) = h0_inc - h0_red;
     }
+}
+else
+{
+    {
+      const uint32_t h0_red = RS_PREFIX_SWEEP0(gl_LocalInvocationID.x);
+      const uint32_t h0_inc = subgroupInclusiveAdd(h0_red);
 
-#elif (RS_SUBGROUP_SIZE == 8)
+      RS_PREFIX_SWEEP0(gl_LocalInvocationID.x) = h0_inc - h0_red;
+    }
+}
 
-#if (RS_SWEEP_0_SIZE < RS_WORKGROUP_SIZE)
+}
+else if (RS_SUBGROUP_SIZE == 8)
+{
+
+if (RS_SWEEP_0_SIZE < RS_WORKGROUP_SIZE)
+{
 
   //////////////////////////////////////////////////////////////////////
   //
@@ -164,9 +180,9 @@ rs_prefix(RS_PREFIX_ARGS)
       RS_PREFIX_SWEEP0(gl_LocalInvocationID.x) = h0_inc - h0_red;
       RS_PREFIX_SWEEP1(gl_SubgroupID) = subgroupBroadcast(h0_inc, RS_SUBGROUP_SIZE - 1);
     }
-
-#else
-
+}
+else
+{
   //////////////////////////////////////////////////////////////////////
   //
   // Scan 0 and Downsweep 1
@@ -182,8 +198,7 @@ rs_prefix(RS_PREFIX_ARGS)
       RS_PREFIX_SWEEP0(idx0) = h0_inc - h0_red;
       RS_PREFIX_SWEEP1(idx1) = subgroupBroadcast(h0_inc, RS_SUBGROUP_SIZE - 1);
     }
-
-#endif
+}
 
   barrier();
 
@@ -198,13 +213,16 @@ rs_prefix(RS_PREFIX_ARGS)
       RS_PREFIX_SWEEP1(gl_LocalInvocationID.x) = h1_inc - h1_red;
     }
 
-#elif (RS_SUBGROUP_SIZE == 4)
+}
+else if (RS_SUBGROUP_SIZE == 4)
+{
 
   //////////////////////////////////////////////////////////////////////
   //
   // Scan 0 and Downsweep 1
   //
-#if (RS_SWEEP_0_SIZE < RS_WORKGROUP_SIZE)
+if (RS_SWEEP_0_SIZE < RS_WORKGROUP_SIZE)
+{
 
   if (gl_LocalInvocationID.x < RS_SWEEP_0_SIZE)  // 64 invocations
     {
@@ -214,9 +232,9 @@ rs_prefix(RS_PREFIX_ARGS)
       RS_PREFIX_SWEEP0(gl_LocalInvocationID.x) = h0_inc - h0_red;
       RS_PREFIX_SWEEP1(gl_SubgroupID)          = subgroupBroadcast(h0_inc, RS_SUBGROUP_SIZE - 1);
     }
-
-#else
-
+}
+else
+{
   [[unroll]] for (uint32_t ii = 0; ii < RS_S0_PASSES; ii++)  // 64 invocations
     {
       const uint32_t idx0 = (ii * RS_WORKGROUP_SIZE) + gl_LocalInvocationID.x;
@@ -228,14 +246,15 @@ rs_prefix(RS_PREFIX_ARGS)
       RS_PREFIX_SWEEP0(idx0) = h0_inc - h0_red;
       RS_PREFIX_SWEEP1(idx1) = subgroupBroadcast(h0_inc, RS_SUBGROUP_SIZE - 1);
     }
-#endif
+}
 
   barrier();
 
   //
   // Scan 1 and Downsweep 2
   //
-#if (RS_SWEEP_1_SIZE < RS_WORKGROUP_SIZE)
+if (RS_SWEEP_1_SIZE < RS_WORKGROUP_SIZE)
+{
   if (gl_LocalInvocationID.x < RS_SWEEP_1_SIZE)  // 16 invocations
     {
       const uint32_t h1_red = RS_PREFIX_SWEEP1(gl_LocalInvocationID.x);
@@ -244,9 +263,9 @@ rs_prefix(RS_PREFIX_ARGS)
       RS_PREFIX_SWEEP1(gl_LocalInvocationID.x) = h1_inc - h1_red;
       RS_PREFIX_SWEEP2(gl_SubgroupID)          = subgroupBroadcast(h1_inc, RS_SUBGROUP_SIZE - 1);
     }
-
-#else
-
+}
+else
+{
   [[unroll]] for (uint32_t ii = 0; ii < RS_S1_PASSES; ii++)  // 16 invocations
     {
       const uint32_t idx1 = (ii * RS_WORKGROUP_SIZE) + gl_LocalInvocationID.x;
@@ -258,8 +277,7 @@ rs_prefix(RS_PREFIX_ARGS)
       RS_PREFIX_SWEEP1(idx1) = h1_inc - h1_red;
       RS_PREFIX_SWEEP2(idx2) = subgroupBroadcast(h1_inc, RS_SUBGROUP_SIZE - 1);
     }
-
-#endif
+}
 
   barrier();
 
@@ -276,9 +294,7 @@ rs_prefix(RS_PREFIX_ARGS)
       RS_PREFIX_SWEEP2(gl_LocalInvocationID.x) = h2_inc - h2_red;
     }
 
-#else
-#error "Error: Unsupported subgroup size"
-#endif
+}
 
   barrier();
 
@@ -286,8 +302,8 @@ rs_prefix(RS_PREFIX_ARGS)
   //
   // Final upsweep 0
   //
-#if ((RS_SUBGROUP_SIZE == 64) || (RS_SUBGROUP_SIZE == 32) || (RS_SUBGROUP_SIZE == 16))
-
+if ((RS_SUBGROUP_SIZE == 64) || (RS_SUBGROUP_SIZE == 32) || (RS_SUBGROUP_SIZE == 16))
+{
   [[unroll]] for (uint32_t ii = 0; ii < RS_H_COMPONENTS; ii++)
     {
       const uint32_t idx0 = (ii * RS_WORKGROUP_SUBGROUPS) + gl_SubgroupID;
@@ -302,8 +318,9 @@ rs_prefix(RS_PREFIX_ARGS)
 #endif
     }
 
-#elif (RS_SUBGROUP_SIZE == 8)
-
+}
+else if (RS_SUBGROUP_SIZE == 8)
+{
   [[unroll]] for (uint32_t ii = 0; ii < RS_H_COMPONENTS; ii++)
     {
       const uint32_t idx0 = (ii * RS_WORKGROUP_SUBGROUPS) + gl_SubgroupID;
@@ -319,9 +336,9 @@ rs_prefix(RS_PREFIX_ARGS)
         h_exc + RS_PREFIX_SWEEP0(idx0) + RS_PREFIX_SWEEP1(idx1);
 #endif
     }
-
-#elif (RS_SUBGROUP_SIZE == 4)
-
+}
+else if (RS_SUBGROUP_SIZE == 4)
+{
   [[unroll]] for (uint32_t ii = 0; ii < RS_H_COMPONENTS; ii++)
     {
       const uint32_t idx0 = (ii * RS_WORKGROUP_SUBGROUPS) + gl_SubgroupID;
@@ -338,12 +355,9 @@ rs_prefix(RS_PREFIX_ARGS)
         h_exc + (RS_PREFIX_SWEEP0(idx0) + RS_PREFIX_SWEEP1(idx1) + RS_PREFIX_SWEEP2(idx2));
 #endif
     }
+}
 
-#else
-#error "Error: Unsupported subgroup size"
-#endif
-
-#endif
+}
 }
 
 //
