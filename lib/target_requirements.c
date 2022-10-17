@@ -11,6 +11,11 @@
 #include "radix_sort/radix_sort_vk.h"
 #include "target.h"
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#define __builtin_popcount __popcnt
+#endif
+
 //
 //
 //

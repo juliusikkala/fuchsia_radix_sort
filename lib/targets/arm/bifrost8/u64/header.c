@@ -17,7 +17,9 @@ const struct radix_sort_vk_target bifrost8_u64_target =
   .magic = RS_HEADER_MAGIC,
 
   .extensions.named = {
-
+    .EXT_subgroup_size_control = false,
+    .KHR_pipeline_executable_properties = false,
+    .NV_shader_subgroup_partitioned = false
   },
 
   .features.named = {

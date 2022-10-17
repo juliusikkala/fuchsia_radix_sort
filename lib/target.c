@@ -67,7 +67,11 @@ radix_sort_vk_target_auto_detect(VkPhysicalDeviceProperties const *         prop
   radix_sort_vk_target_t target = {
     .magic = RS_HEADER_MAGIC,
 
-    .extensions.named = {},
+    .extensions.named = {
+      .EXT_subgroup_size_control= false,
+      .KHR_pipeline_executable_properties = false,
+      .NV_shader_subgroup_partitioned = false
+    },
 
     .features.named = {
       .shaderInt16                  = 1,
