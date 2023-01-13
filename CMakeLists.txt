@@ -11,7 +11,7 @@ function(shader header source source_list)
     string(REPLACE "\." "_" shader_bin_name ${shader_bin_name})
     add_custom_command(
         OUTPUT ${header}
-        COMMAND glslangValidator --target-env vulkan1.2 --vn ${shader_bin_name}_shader_binary ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${header} -Os ${ARGN}
+        COMMAND glslangValidator --target-env vulkan1.2 --vn ${shader_bin_name}_shader_binary ${CMAKE_CURRENT_SOURCE_DIR}/${source} -o ${CMAKE_CURRENT_BINARY_DIR}/${header} ${ARGN}
         MAIN_DEPENDENCY ${source}
         DEPENDS ${source}
         IMPLICIT_DEPENDS C ${source}
